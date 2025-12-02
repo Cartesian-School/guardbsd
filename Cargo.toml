@@ -1,0 +1,78 @@
+# ============================================================================
+# GuardBSD Project Workspace
+# ============================================================================
+# This is the root configuration file. It manages the build settings for
+# all microkernels, servers, and userland utilities.
+# ============================================================================
+
+[workspace]
+resolver = "2"
+
+# List of active project components
+members = [
+    "kernel/microkernels/uk_ipc",
+    "kernel/microkernels/uk_time",
+    "kernel/microkernels/uk_space",
+    "tests",
+    "servers/init",
+    "servers/vfs",
+    "servers/ramfs",
+    "servers/devd",
+    "servers/netd",
+    "servers/netsvc",
+    "drivers/serial",
+    "drivers/storage",
+    "userland/libgbsd",
+    "userland/shell",
+    "userland/vfstest",
+    "userland/devtest",
+    
+    # Future components (uncomment when initialized):
+    # "servers/netd",
+]
+
+# Exclude build tools or documentation from workspace analysis
+exclude = [
+    "tools",
+    "docs",
+    "boot"
+]
+
+# ============================================================================
+# Shared Dependencies (Version Locking)
+# ============================================================================
+# Ensures all microkernels use the exact same version of core libraries.
+[workspace.dependencies]
+# Currently, microkernels are zero-dependency. 
+# Future common dependencies (e.g., bitflags, spin) should be defined here.
+# spin = { version = "0.9", default-features = false }
+# bitflags = "2.4"
+
+# ============================================================================
+# Build Profiles
+# ============================================================================
+
+# --- Development Profile ---
+# Optimized for fast compilation and debugging.
+[profile.dev]
+panic = "abort"       # Unwinding is not supported in bare-metal
+opt-level = 0         # No optimization (fast build)
+debug = true          # Generate debug symbols
+lto = false
+incremental = true
+
+# --- Release Profile (Production) ---
+# Optimized for maximum performance and minimal size.
+[profile.release]
+panic = "abort"       # Unwinding is not supported
+opt-level = 3         # Maximize execution speed (critical for IPC/Sched)
+lto = true            # Link Time Optimization (cross-crate optimization)
+codegen-units = 1     # Slower build, but better optimization
+debug = false         # No debug symbols in final binary
+strip = true          # Strip symbols to reduce ELF size
+overflow-checks = false # Disable runtime overflow checks for speed
+
+# --- Test Profile ---
+[profile.test]
+panic = "abort"
+debug = true
