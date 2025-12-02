@@ -1,0 +1,11 @@
+[package]
+name = "test_framework"
+version = "1.0.0"
+edition = "2021"
+authors = ["Siergej Sobolewski <siergej@cartesianschool.org>"]
+
+[lib]
+name = "test_framework"
+path = "mod.rs"
+
+[dependencies]

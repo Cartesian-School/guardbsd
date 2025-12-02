@@ -1,0 +1,13 @@
+[package]
+name = "storage"
+version = "1.0.0"
+edition = "2021"
+authors = ["Siergej Sobolewski <siergej@cartesianschool.org>"]
+license = "BSD-3-Clause"
+
+[[bin]]
+name = "storage"
+path = "src/main.rs"
+
+[dependencies]
+gbsd = { package = "libgbsd", path = "../../userland/libgbsd" }

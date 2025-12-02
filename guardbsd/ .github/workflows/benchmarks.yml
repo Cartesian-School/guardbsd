@@ -1,0 +1,50 @@
+# .github/workflows/benchmarks.yml
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**/src/**'
+      - 'Cargo.toml'
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  # Enable recording so the bot can leave a comment with the results
+  contents: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Performance Regression Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+
+      # Run benchmarks.
+      # Note: This will only work for components that can be compiled under Linux (host),
+      # or if a custom runner is configured for QEMU.
+      # If the benchmarks are kernel-only, a wrapper script will be required.
+      - name: Run Cargo Bench
+        run: cargo bench --workspace --exclude 'uk_*' --output-format criterion
+        # We exclude microkernels (uk_*) if they don't have support for running on the host.
+        # If you implement the scheduler logic as a separate lib-crate, you can benchmark it here.
+
+      - name: Store Benchmark Result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: GuardBSD Benchmark
+          tool: 'cargo'
+          output-file-path: target/criterion/reports/index.html # The path depends on the criterion configuration
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # If performance drops by more than 20%, mark it as a bug
+          alert-threshold: '120%'
+          comment-on-alert: true
+          fail-on-alert: false
+          save-data-file: true
+          benchmark-data-dir-path: dev/bench
