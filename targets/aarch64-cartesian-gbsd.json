@@ -20,9 +20,5 @@
       "-nostdlib"
     ]
   },
-  "post-link-args": {
-    "ld.lld": [
-      "-Tlinker.ld"
-    ]
-  }
+  "post-link-args": {}
 }

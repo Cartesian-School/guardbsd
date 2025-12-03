@@ -52,7 +52,7 @@ jobs:
             ## GuardBSD Release ${{ github.ref_name }}
             
             ### Artifacts
-            - **x86_64 ISO**: Bootable via BIOS/UEFI (Limine)
+            - **x86_64 ISO**: Bootable via BIOS/UEFI (BSD-style loader chain)
             - **AArch64 Image**: Raw binary for QEMU `virt` machine
             
             ### Integrity

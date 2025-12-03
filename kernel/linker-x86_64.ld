@@ -1,7 +1,7 @@
 # ============================================================================
 # kernel/linker-x86_64.ld
 # Production x86_64 Linker Script
-# Enforces W^X and supports Limine Boot Protocol
+# Enforces W^X for kernel layout (BSD boot chain)
 # ============================================================================
 OUTPUT_FORMAT("elf64-x86-64")
 OUTPUT_ARCH(i386:x86-64)
@@ -28,10 +28,6 @@ SECTIONS
     /* 2. READ-ONLY DATA SEGMENT (R) */
     .rodata : ALIGN(4K) {
         *(.rodata .rodata.*)
-        
-        /* Limine requests usually live in rodata or data */
-        . = ALIGN(8);
-        KEEP(*(.limine_reqs))
     } :rodata
 
     /* 3. READ-WRITE DATA SEGMENT (RW) */
