@@ -10,6 +10,7 @@ resolver = "2"
 
 # List of active project components
 members = [
+    "kernel/boot_stub",
     "kernel/microkernels/uk_ipc",
     "kernel/microkernels/uk_time",
     "kernel/microkernels/uk_space",

@@ -1,0 +1,15 @@
+[package]
+name = "boot_stub"
+version = "1.0.0"
+edition = "2021"
+
+[build-dependencies]
+cc = "1.0"
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+lto = true
+codegen-units = 1

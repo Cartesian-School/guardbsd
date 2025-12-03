@@ -1,0 +1,14 @@
+[package]
+name = "boot_stub_aarch64"
+version = "1.0.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+lto = true
+codegen-units = 1

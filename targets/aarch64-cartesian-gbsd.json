@@ -17,9 +17,12 @@
   "position-independent-executables": false,
   "pre-link-args": {
     "ld.lld": [
-      "-nostdlib",
-      "--gc-sections",
-      "-z", "max-page-size=0x1000"
+      "-nostdlib"
+    ]
+  },
+  "post-link-args": {
+    "ld.lld": [
+      "-Tlinker.ld"
     ]
   }
 }
