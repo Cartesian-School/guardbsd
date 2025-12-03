@@ -1,12 +1,18 @@
-# GuardBSD
+<p align="center">
+  <img src="https://www.guardbsd.org/images/logo-main.png" alt="GuardBSD Logo" width="180">
+</p>
 
-**A Modern Capability-Based Microkernel Operating System**
+<h1 align="center">GuardBSD</h1>
+<p align="center"><strong>A Modern Capability-Based Microkernel Operating System</strong></p>
 
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)](docs/build/building.md)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](CHANGELOG.md)
+<p align="center">
+  <img src="https://img.shields.io/badge/license-BSD--3--Clause-blue.svg">
+  <img src="https://img.shields.io/badge/build-passing-brightgreen.svg">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg">
+</p>
 
 ---
+
 
 ## Overview
 
@@ -33,6 +39,8 @@ qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -serial stdio -m
 # Or with display
 qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -m 256M
 ```
+
+<br>
 
 ---
 
@@ -65,6 +73,8 @@ qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -m 256M
 - **DevD** - Device manager
 - **NetD** - Network stack (planned)
 - **Init** - System initialization
+
+<br>
 
 ---
 
@@ -102,11 +112,14 @@ qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -m 256M
 - Disk: 4 GB
 - Boot: UEFI
 
+<br>
+
 ---
 
 ## Building
 
 ### Prerequisites
+
 ```bash
 # Ubuntu/Debian
 sudo apt install build-essential rust cargo qemu-system-x86 xorriso gnu-efi
@@ -118,7 +131,7 @@ rustup target add x86_64-unknown-none aarch64-unknown-none
 ### Build
 ```bash
 # Clone
-git clone https://github.com/guardbsd/guardbsd
+git clone https://github.com/Cartesian-School/guardbsd
 cd guardbsd
 
 # Build ISO
@@ -128,7 +141,9 @@ make iso
 make test-boot
 ```
 
-See [Building Guide](docs/build/building.md) for details.
+See [Building Guide](docs/build/building.md) for details. (Comming soon!)
+
+<br>
 
 ---
 
@@ -138,17 +153,19 @@ See [Building Guide](docs/build/building.md) for details.
 ┌─────────────────────────────────────┐
 │         User Applications           │
 ├─────────────────────────────────────┤
-│  gsh  │  libgbsd  │  Utilities     │
+│    gsh  │  libgbsd  │  Utilities    │
 ├─────────────────────────────────────┤
-│  VFS  │  DevD  │  NetD  │  Init    │  ← Servers
+│    VFS  │  DevD  │  NetD  │  Init   │  - Servers
 ├─────────────────────────────────────┤
-│  µK-Space │ µK-Time │ µK-IPC       │  ← Microkernels
+│     µK-Space │ µK-Time │ µK-IPC     │  - Microkernels
 ├─────────────────────────────────────┤
-│      Minimal Microkernel            │  ← Kernel
+│         Minimal Microkernel         │  - Kernel
 ├─────────────────────────────────────┤
-│          GuaBoot                    │  ← Bootloader
+│               GuaBoot               │  - Bootloader
 └─────────────────────────────────────┘
 ```
+
+<br>
 
 ---
 
@@ -159,16 +176,20 @@ See [Building Guide](docs/build/building.md) for details.
 - **Memory Footprint:** ~50 MB minimum
 - **Context Switch:** <1 µs
 
+<br>
+
 ---
 
 ## License
 
 BSD 3-Clause License
 
-Copyright (c) 2025, GuardBSD Project
+Copyright (c) 2025, GuardBSD Project, Catresian School, Siergej Sobolewski
 All rights reserved.
 
 See [LICENSE](LICENSE) for details.
+
+<br>
 
 ---
 
@@ -176,14 +197,18 @@ See [LICENSE](LICENSE) for details.
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+<br>
+
 ---
 
 ## Community
 
 - **Website:** https://guardbsd.org
-- **Forum:** https://forum.guardbsd.org
-- **IRC:** #guardbsd on Libera.Chat
-- **Mailing List:** users@guardbsd.org
+- **Forum:** https://forum.guardbsd.org (Comming soon!)
+- **IRC:** #guardbsd on Libera.Chat (Comming soon!)
+- **Mailing List:** ssobo77@gmail.com
+
+<br>
 
 ---
 
