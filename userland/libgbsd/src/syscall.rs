@@ -4,33 +4,33 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-// GuardBSD syscall numbers
-pub const SYS_EXIT: u64 = 1;
-pub const SYS_OPEN: u64 = 5;
-pub const SYS_CLOSE: u64 = 6;
-pub const SYS_READ: u64 = 3;
-pub const SYS_WRITE: u64 = 4;
-pub const SYS_PORT_CREATE: u64 = 20;
-pub const SYS_PORT_DESTROY: u64 = 21;
-pub const SYS_PORT_SEND: u64 = 22;
-pub const SYS_PORT_RECEIVE: u64 = 23;
-pub const SYS_PORT_CALL: u64 = 24;
-pub const SYS_CAP_GRANT: u64 = 25;
-pub const SYS_CAP_REVOKE: u64 = 26;
-pub const SYS_CAP_DELEGATE: u64 = 27;
-pub const SYS_CAP_COPY: u64 = 28;
-pub const SYS_PORT_SYNC_CALL: u64 = 29;
-pub const SYS_PORT_REPLY: u64 = 30;
-pub const SYS_GET_ERROR_STATS: u64 = 31;
-pub const SYS_LOG_READ: u64 = 40;
-pub const SYS_LOG_ACK: u64 = 41;
-pub const SYS_LOG_REGISTER_DAEMON: u64 = 42;
-pub const SYS_GETPID: u64 = 7;
-pub const SYS_EXEC: u64 = 20;
-pub const SYS_STAT: u64 = 8;
-pub const SYS_RENAME: u64 = 9;
-pub const SYS_UNLINK: u64 = 10;
-pub const SYS_SYNC: u64 = 11;
+// GuardBSD syscall numbers (canonical, shared with kernel/boot_stub)
+pub const SYS_EXIT: u64 = 0;
+pub const SYS_WRITE: u64 = 1;
+pub const SYS_READ: u64 = 2;   // ENOSYS placeholder
+pub const SYS_FORK: u64 = 3;   // reserved
+pub const SYS_EXEC: u64 = 4;   // to be implemented
+pub const SYS_WAIT: u64 = 5;   // reserved
+pub const SYS_YIELD: u64 = 6;  // ENOSYS placeholder
+pub const SYS_GETPID: u64 = 7; // to be implemented
+
+pub const SYS_OPEN: u64 = 8;   // reserved
+pub const SYS_CLOSE: u64 = 9;  // reserved
+pub const SYS_MKDIR: u64 = 10; // reserved
+pub const SYS_STAT: u64 = 11;  // reserved
+pub const SYS_RENAME: u64 = 12;// reserved
+pub const SYS_UNLINK: u64 = 13;// reserved
+pub const SYS_SYNC: u64 = 14;  // reserved
+
+pub const SYS_LOG_READ: u64 = 20;   // reserved
+pub const SYS_LOG_ACK: u64 = 21;    // reserved
+pub const SYS_LOG_REGISTER_DAEMON: u64 = 22; // reserved
+
+pub const SYS_IPC_PORT_CREATE: u64 = 30; // reserved
+pub const SYS_IPC_SEND: u64 = 31;        // reserved
+pub const SYS_IPC_RECV: u64 = 32;        // reserved
+
+use crate::error::{Error, Result};
 
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
@@ -191,16 +191,52 @@ pub fn exit(code: u64) -> ! {
 }
 
 #[inline(always)]
-pub fn getpid() -> u64 {
-    unsafe {
-        syscall0(SYS_GETPID)
+pub fn getpid() -> Result<u64> {
+    let ret = unsafe { syscall0(SYS_GETPID) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(crate::error::Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(ret)
     }
 }
 
 #[inline(always)]
-pub fn exec(path: &[u8]) -> ! {
-    unsafe {
-        syscall1(SYS_EXEC, path.as_ptr() as u64);
+pub fn fork() -> Result<u64> {
+    let ret = unsafe { syscall0(SYS_FORK) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(crate::error::Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(ret)
     }
-    loop {} // Should never reach here
+}
+
+#[inline(always)]
+pub fn exec(path: &[u8]) -> Result<()> {
+    let ret = unsafe { syscall1(SYS_EXEC, path.as_ptr() as u64) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(crate::error::Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(())
+    }
+}
+
+#[inline(always)]
+pub fn wait(status: &mut i32) -> Result<u64> {
+    let ret = unsafe { syscall1(SYS_WAIT, status as *mut i32 as u64) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(crate::error::Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(ret)
+    }
+}
+
+#[inline(always)]
+pub fn yield_cpu() {
+    unsafe {
+        syscall0(SYS_YIELD);
+    }
 }

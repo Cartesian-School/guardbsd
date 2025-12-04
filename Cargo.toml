@@ -29,6 +29,7 @@ members = [
     "userland/vfstest",
     "userland/devtest",
     "userland/logd",
+    "userland/init",
     
     # Future components (uncomment when initialized):
     # "servers/netd",

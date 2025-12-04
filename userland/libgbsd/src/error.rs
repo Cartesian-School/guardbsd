@@ -16,6 +16,7 @@ pub enum Error {
     Again,
     Permission,
     Alignment,
+    NoSys,
 }
 
 impl Error {
@@ -31,6 +32,7 @@ impl Error {
             0xFFFF_FFFF_0000_0007 => Error::Alignment,
             0xFFFF_FFFF_0000_0100 => Error::Again,
             0xFFFF_FFFF_0000_0200 => Error::Permission,
+            0xFFFF_FFFF_FFFF_FFDA => Error::NoSys, // -38 ENOSYS
             _ => Error::Invalid,
         }
     }

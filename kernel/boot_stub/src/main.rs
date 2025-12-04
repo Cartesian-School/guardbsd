@@ -10,26 +10,59 @@ mod fs;
 mod scheduler;
 
 mod syscall {
+    // Canonical syscall table shared with kernel/syscall/syscall.rs
+    // Implemented now: exit (0), write (1)
+    // To implement: exec (4), getpid (7), yield (6)
     pub const SYS_EXIT: usize = 0;
     pub const SYS_WRITE: usize = 1;
-    pub const SYS_READ: usize = 2;
+    pub const SYS_READ: usize = 2;   // ENOSYS placeholder
+    pub const SYS_EXEC: usize = 4;   // ENOSYS placeholder
+    pub const SYS_YIELD: usize = 6;  // ENOSYS placeholder
+    pub const SYS_GETPID: usize = 7; // ENOSYS placeholder
+
+    // Reserved/ENOSYS
     pub const SYS_FORK: usize = 3;
-    pub const SYS_EXEC: usize = 4;
     pub const SYS_WAIT: usize = 5;
-    pub const SYS_YIELD: usize = 6;
-    pub const SYS_GETPID: usize = 7;
-    
+    pub const SYS_OPEN: usize = 8;
+    pub const SYS_CLOSE: usize = 9;
+    pub const SYS_MKDIR: usize = 10;
+    pub const SYS_STAT: usize = 11;
+    pub const SYS_RENAME: usize = 12;
+    pub const SYS_UNLINK: usize = 13;
+    pub const SYS_SYNC: usize = 14;
+    pub const SYS_LOG_READ: usize = 20;
+    pub const SYS_LOG_ACK: usize = 21;
+    pub const SYS_LOG_REGISTER_DAEMON: usize = 22;
+    pub const SYS_IPC_PORT_CREATE: usize = 30;
+    pub const SYS_IPC_SEND: usize = 31;
+    pub const SYS_IPC_RECV: usize = 32;
+
+    const ENOSYS: isize = -38;
+
     pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
         match syscall_num {
             SYS_EXIT => sys_exit(arg1 as i32),
             SYS_WRITE => sys_write(arg1, arg2 as *const u8, arg3),
-            SYS_READ => sys_read(arg1, arg2 as *mut u8, arg3),
-            SYS_FORK => sys_fork(),
-            SYS_EXEC => sys_exec(arg1 as *const u8),
-            SYS_WAIT => sys_wait(arg1 as *mut i32),
-            SYS_YIELD => sys_yield(),
-            SYS_GETPID => sys_getpid(),
-            _ => -1,
+            SYS_READ => ENOSYS,
+            SYS_EXEC => ENOSYS,
+            SYS_YIELD => ENOSYS,
+            SYS_GETPID => ENOSYS,
+            SYS_FORK => ENOSYS,
+            SYS_WAIT => ENOSYS,
+            SYS_OPEN => ENOSYS,
+            SYS_CLOSE => ENOSYS,
+            SYS_MKDIR => ENOSYS,
+            SYS_STAT => ENOSYS,
+            SYS_RENAME => ENOSYS,
+            SYS_UNLINK => ENOSYS,
+            SYS_SYNC => ENOSYS,
+            SYS_LOG_READ => ENOSYS,
+            SYS_LOG_ACK => ENOSYS,
+            SYS_LOG_REGISTER_DAEMON => ENOSYS,
+            SYS_IPC_PORT_CREATE => ENOSYS,
+            SYS_IPC_SEND => ENOSYS,
+            SYS_IPC_RECV => ENOSYS,
+            _ => ENOSYS,
         }
     }
     
@@ -63,97 +96,17 @@ mod syscall {
         }
     }
     
-    fn sys_read(fd: usize, buf: *mut u8, len: usize) -> isize {
-        if fd == 0 {
-            // stdin - read from keyboard
-            unsafe {
-                if buf.is_null() || len == 0 { return -1; }
-                let mut count = 0;
-                while count < len {
-                    if let Some(ch) = super::drivers::keyboard::read_char() {
-                        *buf.add(count) = ch;
-                        count += 1;
-                        if ch == b'\n' { break; }
-                    } else {
-                        break;
-                    }
-                }
-                count as isize
-            }
-        } else {
-            -1
-        }
-    }
+    fn sys_read(_fd: usize, _buf: *mut u8, _len: usize) -> isize { ENOSYS }
     
-    fn sys_fork() -> isize {
-        let parent_pid = super::scheduler::get_current();
-        unsafe {
-            super::print("[SYSCALL] fork() from PID ");
-            super::print_num(parent_pid);
-            super::print("\n");
-        }
-        
-        // Create child process (copy of parent)
-        // For now, return mock PID
-        if let Some(child_pid) = super::scheduler::create_process(0x400000, 0x7FFFFFFF) {
-            child_pid as isize
-        } else {
-            -1
-        }
-    }
+    fn sys_fork() -> isize { ENOSYS }
     
-    fn sys_exec(path: *const u8) -> isize {
-        unsafe {
-            if path.is_null() { return -1; }
-            
-            // Read path string
-            let mut len = 0;
-            while len < 256 && *path.add(len) != 0 {
-                len += 1;
-            }
-            let path_slice = core::slice::from_raw_parts(path, len);
-            
-            super::print("[SYSCALL] exec(");
-            for &b in path_slice {
-                while (super::inb(super::COM1 + 5) & 0x20) == 0 {}
-                super::outb(super::COM1, b);
-            }
-            super::print(")\n");
-            
-            // Load and execute binary
-            // For now, return success
-            0
-        }
-    }
+    fn sys_exec(_path: *const u8) -> isize { ENOSYS }
     
-    fn sys_wait(status: *mut i32) -> isize {
-        let pid = super::scheduler::get_current();
-        unsafe {
-            super::print("[SYSCALL] wait() from PID ");
-            super::print_num(pid);
-            super::print("\n");
-            
-            if !status.is_null() {
-                *status = 0;
-            }
-        }
-        // Return child PID (mock)
-        -1
-    }
+    fn sys_wait(_status: *mut i32) -> isize { ENOSYS }
     
-    fn sys_yield() -> isize {
-        unsafe {
-            super::print("[SYSCALL] yield()\n");
-        }
-        // Trigger scheduler
-        // For now, just return
-        0
-    }
+    fn sys_yield() -> isize { ENOSYS }
     
-    fn sys_getpid() -> isize {
-        let pid = super::scheduler::get_current();
-        pid as isize
-    }
+    fn sys_getpid() -> isize { ENOSYS }
 }
 
 #[no_mangle]

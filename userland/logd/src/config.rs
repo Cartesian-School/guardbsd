@@ -42,29 +42,25 @@ impl LogdConfig {
     }
 
     pub fn load_from_file(&mut self, path: &[u8]) -> Result<(), ()> {
-        // Try to open config file
-        let fd = match crate::open(path, crate::O_RDONLY) {
-            Ok(fd) => fd,
-            Err(_) => return Err(()), // File doesn't exist or can't be opened
-        };
-
-        let mut buf = [0u8; 2048];
-        let len = match crate::read(fd, &mut buf) {
-            Ok(len) => len,
-            Err(_) => {
+        match crate::open(path, crate::O_RDONLY) {
+            Ok(fd) => {
+                let mut buf = [0u8; 2048];
+                let len = match crate::read(fd, &mut buf) {
+                    Ok(len) => len,
+                    Err(_) => {
+                        let _ = crate::close(fd);
+                        return Err(());
+                    }
+                };
                 let _ = crate::close(fd);
-                return Err(());
+                if len == 0 {
+                    return Err(());
+                }
+                self.parse_config(&buf[..len])
             }
-        };
-
-        let _ = crate::close(fd);
-
-        if len == 0 {
-            return Err(());
+            Err(crate::error::Error::NoSys) => Err(()), // FS not available
+            Err(_) => Err(()),
         }
-
-        // Parse the configuration
-        self.parse_config(&buf[..len])
     }
 
     fn parse_config(&mut self, data: &[u8]) -> Result<(), ()> {

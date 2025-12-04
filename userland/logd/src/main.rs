@@ -36,29 +36,34 @@ fn logd_main() -> ! {
     } else {
         // Log config fallback (but don't use klog_* to avoid recursion)
         let mut msg = [0u8; 64];
-        let len = format_config_msg(&mut msg, "using defaults");
+        let len = format_config_msg(&mut msg, "FS unavailable, using defaults");
         let _ = write(STDOUT, &msg[..len]);
     }
 
     // SECOND: Create log rotator
-    let rotator = LogRotator::new(config);
+    let mut rotator = LogRotator::new(config);
 
     // THIRD: Register ourselves as the logging daemon
     let pid = getpid();
-    if let Err(_) = register_kernel_log_daemon(pid) {
-        // Registration failed - exit
-        exit(1);
-    }
+    let log_syscalls = register_kernel_log_daemon(pid).is_ok();
 
-    // FOURTH: Open log file
+    // FOURTH: Log file output (placeholder - filesystem not implemented)
     let mut log_fd: Option<Fd> = None;
-    if let Ok(fd) = open(&config.log_file[..config.log_file_len], O_CREAT | O_WRONLY) {
-        log_fd = Some(fd);
+    // TODO: Open log file when filesystem syscalls are implemented
 
-        // Log successful startup (but don't use klog_* to avoid recursion)
-        let mut msg = [0u8; 64];
-        let len = format_config_msg(&mut msg, "online with rotation");
-        let _ = write(STDOUT, &msg[..len]);
+    // Log successful startup (but don't use klog_* to avoid recursion)
+    let mut msg = [0u8; 64];
+    let len = if log_syscalls {
+        format_config_msg(&mut msg, "online (stdout + pending FS/log syscalls)")
+    } else {
+        format_config_msg(&mut msg, "stdout-only (log syscalls ENOSYS)")
+    };
+    let _ = write(STDOUT, &msg[..len]);
+
+    if !log_syscalls {
+        loop {
+            cpu_relax();
+        }
     }
 
     let mut records = [UserLogRecord::empty(); LOG_BATCH];
@@ -87,19 +92,19 @@ fn logd_main() -> ! {
                 if let Some(fd) = log_fd {
                     // Check if rotation is needed before writing
                     let log_path = &config.log_file[..config.log_file_len];
-                    let _ = rotator.check_and_rotate(log_path);
+                    let _ = rotator.check_and_rotate(log_path, Some(fd));
 
                     let _ = write(fd, &line[..len]);
+                    rotator.add_bytes(len);
                 }
             }
             let _ = ack_kernel_logs(count);
 
-            // Periodic flush
+            // Periodic flush (placeholder - no sync syscall yet)
             let now = last_flush.wrapping_add(1); // Simple counter for now
             if now.wrapping_sub(last_flush) >= config.flush_interval_ms as u64 {
-                if let Some(fd) = log_fd {
-                    let _ = rotate::fs_sync(fd);
-                }
+                // TODO: Implement flush when sync syscall is available
+                // For now, writes are unbuffered
                 last_flush = now;
             }
         } else {
@@ -192,4 +197,3 @@ fn cpu_relax() {
         core::arch::asm!("yield", options(nomem, nostack));
     }
 }
-
