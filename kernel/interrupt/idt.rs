@@ -1,7 +1,8 @@
-// Interrupt Descriptor Table - x86_64
+// Interrupt Descriptor Table - legacy x86 (32-bit)
 // BSD 3-Clause License
 
 #![no_std]
+#![cfg(feature = "x86_legacy")]
 
 #[repr(C, packed)]
 struct IdtEntry {

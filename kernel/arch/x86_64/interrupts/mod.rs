@@ -5,9 +5,11 @@
 
 pub mod gdt64;
 pub mod idt64;
+pub mod syscall_isr;
 
 use crate::sched::{self, ArchContext};
 use crate::trapframe::TrapFrameX86_64;
+pub use syscall_isr::x86_64_syscall_entry;
 
 extern "C" {
     fn arch_context_switch(old: *mut ArchContext, new: *const ArchContext);

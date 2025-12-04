@@ -33,11 +33,13 @@ static mut IDT: [IdtEntry; 256] = [IdtEntry {
 
 extern "C" {
     fn timer_isr64();
+    fn syscall_isr64();
 }
 
 pub fn init_idt64() {
     unsafe {
         set_gate(0x20, timer_isr64 as u64, 0x08, 0x8E); // present, ring0, interrupt gate
+        set_gate(0x80, syscall_isr64 as u64, 0x08, 0xEE); // present, ring3, interrupt gate
 
         let idtr = IdtPtr {
             limit: (core::mem::size_of::<[IdtEntry; 256]>() - 1) as u16,

@@ -53,6 +53,8 @@ pub enum ThreadState {
     Ready,
     Running,
     Blocked,
+    BlockedIpcRecv,
+    BlockedIpcSend,
     Sleeping,
     Zombie,
 }
@@ -452,10 +454,110 @@ fn read_cr3() -> u64 {
 
 pub fn unpark_thread(idx: usize) {
     let mut s = SCHED.lock();
-    if idx < MAX_THREADS && matches!(s.tcbs[idx].state, ThreadState::Blocked | ThreadState::Sleeping) {
+    if idx < MAX_THREADS
+        && matches!(
+            s.tcbs[idx].state,
+            ThreadState::Blocked | ThreadState::Sleeping | ThreadState::BlockedIpcRecv | ThreadState::BlockedIpcSend
+        )
+    {
         s.tcbs[idx].state = ThreadState::Ready;
         let cpu = s.tcbs[idx].cpu_affinity;
         s.cpus[cpu].rq.push(&mut s.tcbs, idx);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IPC block/wake helpers
+// ---------------------------------------------------------------------------
+
+#[cfg(target_arch = "x86_64")]
+pub fn scheduler_block_current_ipc_recv(_port: u64) {
+    let mut s = SCHED.lock();
+    if let Some(cur) = s.cpus[0].current {
+        s.tcbs[cur].state = ThreadState::BlockedIpcRecv;
+        s.cpus[0].current = None;
+        if let Some(next) = s.cpus[0].rq.pop(&mut s.tcbs) {
+            s.tcbs[next].state = ThreadState::Running;
+            s.cpus[0].current = Some(next);
+            let old_ptr = &mut s.tcbs[cur].ctx as *mut ArchContext;
+            let new_ptr = &s.tcbs[next].ctx as *const ArchContext;
+            drop(s);
+            unsafe { arch_context_switch(old_ptr, new_ptr) };
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn scheduler_block_current_ipc_send(_port: u64) {
+    let mut s = SCHED.lock();
+    if let Some(cur) = s.cpus[0].current {
+        s.tcbs[cur].state = ThreadState::BlockedIpcSend;
+        s.cpus[0].current = None;
+        if let Some(next) = s.cpus[0].rq.pop(&mut s.tcbs) {
+            s.tcbs[next].state = ThreadState::Running;
+            s.cpus[0].current = Some(next);
+            let old_ptr = &mut s.tcbs[cur].ctx as *mut ArchContext;
+            let new_ptr = &s.tcbs[next].ctx as *const ArchContext;
+            drop(s);
+            unsafe { arch_context_switch(old_ptr, new_ptr) };
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Kernel thread support (x86_64 only)
+// ---------------------------------------------------------------------------
+
+pub type ThreadId = usize;
+
+#[cfg(target_arch = "x86_64")]
+pub fn spawn_kernel_thread(entry: fn()) -> ThreadId {
+    use crate::mm::alloc_page;
+
+    let stack_base = alloc_page().expect("kernel stack alloc failed");
+    let stack_top = stack_base as u64 + 4096u64;
+
+    let mut ctx = ArchContext::zeroed();
+    ctx.rip = entry as u64;
+    ctx.rsp = stack_top;
+    ctx.cr3 = read_cr3();
+    ctx.cs = 0x08;
+    ctx.ss = 0x10;
+
+    register_thread(0, 1, 0, ctx).expect("spawn_kernel_thread failed")
+}
+
+#[cfg(target_arch = "x86_64")]
+static mut BOOT_CTX: ArchContext = ArchContext::zeroed();
+
+#[cfg(target_arch = "x86_64")]
+pub fn start_first_thread() -> ! {
+    let next_ptr = {
+        let mut s = SCHED.lock();
+        if s.cpus[0].current.is_none() {
+            if let Some(next) = s.cpus[0].rq.pop(&mut s.tcbs) {
+                s.tcbs[next].state = ThreadState::Running;
+                s.cpus[0].current = Some(next);
+                &s.tcbs[next].ctx as *const ArchContext
+            } else {
+                core::ptr::null()
+            }
+        } else {
+            core::ptr::null()
+        }
+    };
+
+    if next_ptr.is_null() {
+        loop {
+            unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)) };
+        }
+    } else {
+        unsafe {
+            arch_context_switch(&mut BOOT_CTX as *mut ArchContext, next_ptr);
+        }
+        loop {
+            unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)) };
+        }
     }
 }
 

@@ -1,5 +1,10 @@
-// Timer IRQ Handler - x86 Assembly
+// Timer IRQ Handler - x86 Assembly (legacy 32-bit)
 // BSD 3-Clause License
+
+#ifndef X86_LEGACY
+#define X86_LEGACY
+#endif
+#ifdef X86_LEGACY
 
 .section .text
 .global timer_irq_handler
@@ -16,3 +21,4 @@ timer_irq_handler:
     
     popal
     iret
+#endif

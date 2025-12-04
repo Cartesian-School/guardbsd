@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![cfg(feature = "x86_legacy")]
 
 use core::panic::PanicInfo;
 

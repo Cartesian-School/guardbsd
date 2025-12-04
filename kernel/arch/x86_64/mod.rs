@@ -15,7 +15,20 @@ pub extern "C" fn kernel_main_x86_64() -> ! {
     interrupts::gdt64::init_gdt64();
     interrupts::idt64::init_idt64();
 
-    // TODO: bring up devices, memory, scheduler. For now, halt loop.
+    // Spawn test threads
+    #[cfg(target_arch = "x86_64")]
+    {
+        use crate::sched::{spawn_kernel_thread, start_first_thread};
+        use crate::tests::preempt_threads::{thread_a, thread_b, thread_c, thread_d};
+
+        spawn_kernel_thread(thread_a);
+        spawn_kernel_thread(thread_b);
+        spawn_kernel_thread(thread_c);
+        spawn_kernel_thread(thread_d);
+
+        start_first_thread();
+    }
+
     loop {
         unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)) };
     }

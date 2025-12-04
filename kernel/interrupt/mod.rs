@@ -1,5 +1,7 @@
-// Interrupt Module
+// Interrupt Module (legacy x86 only)
 // BSD 3-Clause License
+
+#![cfg(feature = "x86_legacy")]
 
 pub mod idt;
 
