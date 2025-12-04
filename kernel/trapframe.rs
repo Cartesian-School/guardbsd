@@ -181,7 +181,11 @@ impl From<&TrapFrameAArch64> for ArchContext {
         ctx.sp = tf.sp_el1;
         ctx.elr = tf.elr_el1;
         ctx.spsr = tf.spsr_el1;
-        ctx.ttbr0 = 0; // caller should populate address space
+        ctx.esr = tf.esr_el1;
+        // Preserve the current address space so context switches keep TTBR0 stable.
+        let ttbr0: u64;
+        unsafe { core::arch::asm!("mrs {}, ttbr0_el1", out(reg) ttbr0, options(nomem, nostack, preserves_flags)) };
+        ctx.ttbr0 = ttbr0;
         ctx
     }
 }
@@ -195,7 +199,7 @@ impl From<&ArchContext> for TrapFrameAArch64 {
             sp_el1: ctx.sp,
             elr_el1: ctx.elr,
             spsr_el1: ctx.spsr,
-            esr_el1: 0,
+            esr_el1: ctx.esr,
         }
     }
 }

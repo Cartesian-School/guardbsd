@@ -452,6 +452,23 @@ fn read_cr3() -> u64 {
     val
 }
 
+/// Timer tick entry wrapper for interrupt handlers (AArch64).
+#[cfg(target_arch = "aarch64")]
+pub fn timer_tick_entry_aarch64(cpu_id: usize, tf: &mut crate::trapframe::TrapFrameAArch64) {
+    let user_sp = tf.sp_el0;
+    let mut ctx: ArchContext = tf.into();
+    let next = scheduler_handle_tick(cpu_id, &mut ctx as *mut ArchContext);
+    if next.is_null() {
+        let mut updated = crate::trapframe::TrapFrameAArch64::from(&ctx);
+        updated.sp_el0 = user_sp;
+        *tf = updated;
+    } else {
+        unsafe {
+            arch_context_switch(&mut ctx as *mut ArchContext, next);
+        }
+    }
+}
+
 pub fn unpark_thread(idx: usize) {
     let mut s = SCHED.lock();
     if idx < MAX_THREADS
