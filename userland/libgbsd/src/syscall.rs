@@ -24,6 +24,8 @@ pub const SYS_PORT_REPLY: u64 = 30;
 pub const SYS_GET_ERROR_STATS: u64 = 31;
 pub const SYS_LOG_READ: u64 = 40;
 pub const SYS_LOG_ACK: u64 = 41;
+pub const SYS_LOG_REGISTER_DAEMON: u64 = 42;
+pub const SYS_GETPID: u64 = 7;
 
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
@@ -181,4 +183,11 @@ pub fn exit(code: u64) -> ! {
         syscall1(SYS_EXIT, code);
     }
     loop {}
+}
+
+#[inline(always)]
+pub fn getpid() -> u64 {
+    unsafe {
+        syscall0(SYS_GETPID)
+    }
 }

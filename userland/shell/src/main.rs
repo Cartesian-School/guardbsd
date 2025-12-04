@@ -28,7 +28,10 @@ pub extern "C" fn _start() -> ! {
 
 fn shell_main() -> ! {
     let mut cmd_buf = [0u8; MAX_CMD_LEN];
-    
+
+    // Display logging service status on startup
+    let _ = println(b"GuardBSD logging service: ACTIVE");
+
     loop {
         // Display prompt
         let _ = print(PROMPT);

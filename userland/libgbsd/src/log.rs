@@ -21,6 +21,12 @@ pub fn ack_kernel_logs(count: usize) -> Result<()> {
     decode_result(ret).map(|_| ())
 }
 
+#[inline]
+pub fn register_kernel_log_daemon(pid: u64) -> Result<()> {
+    let ret = unsafe { syscall1(SYS_LOG_REGISTER_DAEMON, pid) };
+    decode_result(ret).map(|_| ())
+}
+
 fn decode_result(ret: u64) -> Result<u64> {
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {

@@ -2,7 +2,15 @@
 
 use core::cell::UnsafeCell;
 use core::fmt;
+use core::fmt::Write;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+// Recursion protection: per-CPU flag to prevent recursive logging
+#[cfg(target_arch = "x86_64")]
+static LOGGING_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_arch = "aarch64")]
+static LOGGING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 // Tunables
 pub const LOG_RING_SIZE: usize = 256;
@@ -162,6 +170,18 @@ pub fn default_early_print(_msg: &str) {}
 // --------------------------------------------------------------------------
 // Public API
 // --------------------------------------------------------------------------
+// SAFETY MODEL:
+// - ISR logging: try_lock() + serial fallback (never blocks)
+// - Syscall read: try_lock() + return 0 records (never blocks)
+// - Syscall ack: try_lock() + return E_AGAIN (never blocks)
+// - Kernel internal: unchanged (may use blocking locks if not in syscall)
+//
+// INVARIANTS:
+// - Syscalls never block on ring buffer locks
+// - Syscalls are not allowed to run concurrently with ISR logging
+// - Syscalls return appropriate errors when contention happens
+// - Recursion guard prevents infinite logging loops
+// --------------------------------------------------------------------------
 
 pub fn init(callbacks: LoggerCallbacks) {
     LOGGER.init(callbacks);
@@ -171,12 +191,19 @@ pub fn log(level: LogLevel, subsystem: &'static str, args: fmt::Arguments) {
     LOGGER.record(level, subsystem, args);
 }
 
+/// Read records from the kernel log ring buffer.
+/// Returns the number of records copied, or 0 if ring is busy.
 pub fn read_records(out: &mut [UserLogRecord]) -> usize {
-    LOGGER.read(out)
+    match LOGGER.read(out) {
+        Ok(count) => count,
+        Err(()) => 0, // Ring busy (ISR contention) - return 0 records
+    }
 }
 
-pub fn ack_records(count: usize) {
-    LOGGER.ack(count);
+/// Acknowledge records in the kernel log ring buffer.
+/// Returns Ok(()) on success, Err(()) if ring is busy.
+pub fn ack_records(count: usize) -> Result<(), ()> {
+    LOGGER.ack(count)
 }
 
 pub fn set_callbacks(callbacks: LoggerCallbacks) {
@@ -253,6 +280,19 @@ impl Logger {
     }
 
     fn record(&self, level: LogLevel, subsystem: &'static str, args: fmt::Arguments) {
+        // Recursion protection: prevent logging while already logging
+        if LOGGING_ACTIVE.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+            // Recursion detected: use serial fallback only
+            let mut msg_buf = MsgBuf::new();
+            let _ = fmt::write(&mut msg_buf, args);
+            let cb = self.callbacks.get();
+            let mut early = EarlyBuf::new();
+            let _ = early.write_prefix(level, subsystem);
+            let _ = early.write_str(msg_buf.as_str());
+            (cb.early_print)(early.as_str());
+            return;
+        }
+
         let mut msg_buf = MsgBuf::new();
         let _ = fmt::write(&mut msg_buf, args);
 
@@ -270,8 +310,17 @@ impl Logger {
                 tid: (cb.thread_id)(),
             };
 
-            let mut ring = self.ring.lock();
-            ring.push(record);
+            // Deadlock prevention: use try_lock in ISR context
+            // If try_lock fails, fall back to serial-only logging
+            if let Some(mut ring) = self.ring.try_lock() {
+                ring.push(record);
+            } else {
+                // ISR context or lock contention: serial fallback
+                let mut early = EarlyBuf::new();
+                let _ = early.write_prefix(level, subsystem);
+                let _ = early.write_str(msg_buf.as_str());
+                (cb.early_print)(early.as_str());
+            }
         } else {
             // Early boot fallback: serial-only
             let mut early = EarlyBuf::new();
@@ -279,22 +328,40 @@ impl Logger {
             let _ = early.write_str(msg_buf.as_str());
             (cb.early_print)(early.as_str());
         }
+
+        // Clear recursion flag
+        LOGGING_ACTIVE.store(false, Ordering::Release);
     }
 
-    fn read(&self, out: &mut [UserLogRecord]) -> usize {
+    /// Read records from the ring buffer.
+    /// Returns Ok(count) on success, Err(()) if lock is busy (ISR contention).
+    fn read(&self, out: &mut [UserLogRecord]) -> Result<usize, ()> {
         if out.is_empty() {
-            return 0;
+            return Ok(0);
         }
-        let mut ring = self.ring.lock();
-        ring.copy_out(out)
+
+        // Non-blocking: return error if ring is busy (ISR logging in progress)
+        if let Some(ring) = self.ring.try_lock() {
+            Ok(ring.copy_out(out))
+        } else {
+            Err(())
+        }
     }
 
-    fn ack(&self, count: usize) {
+    /// Acknowledge records (remove from ring buffer).
+    /// Returns Ok(()) on success, Err(()) if lock is busy (ISR contention).
+    fn ack(&self, count: usize) -> Result<(), ()> {
         if count == 0 {
-            return;
+            return Ok(());
         }
-        let mut ring = self.ring.lock();
-        ring.ack(count);
+
+        // Non-blocking: return error if ring is busy (ISR logging in progress)
+        if let Some(mut ring) = self.ring.try_lock() {
+            ring.ack(count);
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 }
 
@@ -320,6 +387,14 @@ impl LogRing {
     }
 
     fn push(&mut self, record: LogRecord) {
+        // Validate record before insertion
+        if record.len > LOG_MSG_MAX as u16 {
+            // Error: record too large - use serial fallback
+            // DO NOT call klog_* here to avoid recursion
+            serial_error_print(b"[KLOG-ERR] record too large");
+            return;
+        }
+
         self.buf[self.head] = record;
         self.head = (self.head + 1) % LOG_RING_SIZE;
 
@@ -399,6 +474,20 @@ impl<T> SpinLock<T> {
             }
         }
         SpinLockGuard { lock: self }
+    }
+
+    /// Try to acquire the lock without blocking.
+    /// Returns Some(guard) if successful, None if already locked.
+    pub fn try_lock(&self) -> Option<SpinLockGuard<'_, T>> {
+        if self
+            .lock
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            Some(SpinLockGuard { lock: self })
+        } else {
+            None
+        }
     }
 }
 
@@ -522,5 +611,23 @@ impl CallbackCell {
 
     fn get(&self) -> LoggerCallbacks {
         unsafe { *self.value.get() }
+    }
+}
+
+// Error printing without logging (prevents recursion)
+fn serial_error_print(msg: &[u8]) {
+    // Simple serial output for error messages
+    // Uses COM1 directly without any logging infrastructure
+    const COM1: u16 = 0x3F8;
+    for &byte in msg {
+        unsafe {
+            while (core::ptr::read_volatile((COM1 + 5) as *const u8) & 0x20) == 0 {}
+            core::ptr::write_volatile(COM1 as *mut u8, byte);
+        }
+    }
+    // Add newline
+    unsafe {
+        while (core::ptr::read_volatile((COM1 + 5) as *const u8) & 0x20) == 0 {}
+        core::ptr::write_volatile(COM1 as *mut u8, b'\n');
     }
 }

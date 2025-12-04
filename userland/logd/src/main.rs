@@ -4,9 +4,8 @@
 #![no_std]
 #![no_main]
 
-use core::panic::PanicInfo;
 use gbsd::*;
-use kernel_log::{LogLevel, UserLogRecord, LOG_MSG_MAX, LOG_SUBSYS_MAX};
+use kernel_log::{UserLogRecord, LOG_MSG_MAX, LOG_SUBSYS_MAX};
 
 const STDOUT: Fd = 1;
 const LOG_BATCH: usize = 16;
@@ -19,17 +18,27 @@ pub extern "C" fn _start() -> ! {
 }
 
 fn logd_main() -> ! {
-    let mut records = [UserLogRecord::empty(); LOG_BATCH];
-    let mut line = [0u8; LINE_CAP];
+    // FIRST: Register ourselves as the logging daemon
+    let pid = getpid();
+    if let Err(_) = register_kernel_log_daemon(pid) {
+        // Registration failed - exit
+        exit(1);
+    }
+
+    // SECOND: Try to create log directory and open log file
     let mut log_fd: Option<Fd> = None;
 
-    loop {
-        if log_fd.is_none() {
-            if let Ok(fd) = open(LOG_PATH, O_CREAT | O_WRONLY) {
-                log_fd = Some(fd);
-            }
-        }
+    // Try to create /var/log directory (this may fail if VFS is not ready)
+    // For now, just try to open the log file directly
+    if let Ok(fd) = open(LOG_PATH, O_CREAT | O_WRONLY) {
+        log_fd = Some(fd);
+    }
+    // If file open fails, we'll fall back to stdout only
 
+    let mut records = [UserLogRecord::empty(); LOG_BATCH];
+    let mut line = [0u8; LINE_CAP];
+
+    loop {
         let count = match read_kernel_logs(&mut records) {
             Ok(c) => c,
             Err(_) => 0,
@@ -127,7 +136,3 @@ fn cpu_relax() {
     }
 }
 
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    exit(1);
-}
