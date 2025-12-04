@@ -22,6 +22,8 @@ pub const SYS_CAP_COPY: u64 = 28;
 pub const SYS_PORT_SYNC_CALL: u64 = 29;
 pub const SYS_PORT_REPLY: u64 = 30;
 pub const SYS_GET_ERROR_STATS: u64 = 31;
+pub const SYS_LOG_READ: u64 = 40;
+pub const SYS_LOG_ACK: u64 = 41;
 
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]

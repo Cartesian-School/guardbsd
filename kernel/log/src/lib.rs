@@ -1,0 +1,526 @@
+#![no_std]
+
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+// Tunables
+pub const LOG_RING_SIZE: usize = 256;
+pub const LOG_MSG_MAX: usize = 192;
+pub const LOG_SUBSYS_MAX: usize = 32;
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LogLevel {
+    Trace = 0,
+    Debug = 1,
+    Info = 2,
+    Warn = 3,
+    Error = 4,
+}
+
+impl LogLevel {
+    #[inline]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            LogLevel::Trace => "TRACE",
+            LogLevel::Debug => "DEBUG",
+            LogLevel::Info => "INFO",
+            LogLevel::Warn => "WARN",
+            LogLevel::Error => "ERROR",
+        }
+    }
+}
+
+pub type ThreadId = u64;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct LogRecord {
+    pub ts: u64,
+    pub level: LogLevel,
+    pub subsystem: &'static str,
+    pub msg: [u8; LOG_MSG_MAX],
+    pub len: u16,
+    pub cpu_id: u8,
+    pub tid: ThreadId,
+}
+
+impl LogRecord {
+    pub const fn empty() -> Self {
+        Self {
+            ts: 0,
+            level: LogLevel::Info,
+            subsystem: "",
+            msg: [0; LOG_MSG_MAX],
+            len: 0,
+            cpu_id: 0,
+            tid: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct UserLogRecord {
+    pub ts: u64,
+    pub level: LogLevel,
+    pub cpu_id: u8,
+    pub tid: ThreadId,
+    pub msg_len: u16,
+    pub subsystem_len: u8,
+    pub msg: [u8; LOG_MSG_MAX],
+    pub subsystem: [u8; LOG_SUBSYS_MAX],
+}
+
+impl UserLogRecord {
+    pub const fn empty() -> Self {
+        Self {
+            ts: 0,
+            level: LogLevel::Info,
+            cpu_id: 0,
+            tid: 0,
+            msg_len: 0,
+            subsystem_len: 0,
+            msg: [0; LOG_MSG_MAX],
+            subsystem: [0; LOG_SUBSYS_MAX],
+        }
+    }
+
+    fn from_kernel(rec: &LogRecord) -> Self {
+        let mut msg = [0u8; LOG_MSG_MAX];
+        let copy_len = core::cmp::min(rec.len as usize, LOG_MSG_MAX);
+        msg[..copy_len].copy_from_slice(&rec.msg[..copy_len]);
+
+        let mut subsystem = [0u8; LOG_SUBSYS_MAX];
+        let subsys_bytes = rec.subsystem.as_bytes();
+        let subsys_len = core::cmp::min(subsys_bytes.len(), LOG_SUBSYS_MAX);
+        subsystem[..subsys_len].copy_from_slice(&subsys_bytes[..subsys_len]);
+
+        Self {
+            ts: rec.ts,
+            level: rec.level,
+            cpu_id: rec.cpu_id,
+            tid: rec.tid,
+            msg_len: copy_len as u16,
+            subsystem_len: subsys_len as u8,
+            msg,
+            subsystem,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct LoggerCallbacks {
+    pub timestamp: fn() -> u64,
+    pub cpu_id: fn() -> u8,
+    pub thread_id: fn() -> ThreadId,
+    pub early_print: fn(&str),
+}
+
+impl LoggerCallbacks {
+    pub const fn new(
+        timestamp: fn() -> u64,
+        cpu_id: fn() -> u8,
+        thread_id: fn() -> ThreadId,
+        early_print: fn(&str),
+    ) -> Self {
+        Self {
+            timestamp,
+            cpu_id,
+            thread_id,
+            early_print,
+        }
+    }
+
+    pub const fn default() -> Self {
+        Self {
+            timestamp: default_timestamp,
+            cpu_id: default_cpu_id,
+            thread_id: default_thread_id,
+            early_print: default_early_print,
+        }
+    }
+}
+
+static FALLBACK_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn default_timestamp() -> u64 {
+    FALLBACK_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+pub fn default_cpu_id() -> u8 {
+    0
+}
+
+pub fn default_thread_id() -> ThreadId {
+    0
+}
+
+pub fn default_early_print(_msg: &str) {}
+
+// --------------------------------------------------------------------------
+// Public API
+// --------------------------------------------------------------------------
+
+pub fn init(callbacks: LoggerCallbacks) {
+    LOGGER.init(callbacks);
+}
+
+pub fn log(level: LogLevel, subsystem: &'static str, args: fmt::Arguments) {
+    LOGGER.record(level, subsystem, args);
+}
+
+pub fn read_records(out: &mut [UserLogRecord]) -> usize {
+    LOGGER.read(out)
+}
+
+pub fn ack_records(count: usize) {
+    LOGGER.ack(count);
+}
+
+pub fn set_callbacks(callbacks: LoggerCallbacks) {
+    LOGGER.set_callbacks(callbacks);
+}
+
+// --------------------------------------------------------------------------
+// Macros
+// --------------------------------------------------------------------------
+
+#[macro_export]
+macro_rules! klog_trace {
+    ($subsystem:expr, $($arg:tt)*) => {
+        $crate::log($crate::LogLevel::Trace, $subsystem, core::format_args!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! klog_debug {
+    ($subsystem:expr, $($arg:tt)*) => {
+        $crate::log($crate::LogLevel::Debug, $subsystem, core::format_args!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! klog_info {
+    ($subsystem:expr, $($arg:tt)*) => {
+        $crate::log($crate::LogLevel::Info, $subsystem, core::format_args!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! klog_warn {
+    ($subsystem:expr, $($arg:tt)*) => {
+        $crate::log($crate::LogLevel::Warn, $subsystem, core::format_args!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! klog_error {
+    ($subsystem:expr, $($arg:tt)*) => {
+        $crate::log($crate::LogLevel::Error, $subsystem, core::format_args!($($arg)*));
+    };
+}
+
+// --------------------------------------------------------------------------
+// Logger core
+// --------------------------------------------------------------------------
+
+static LOGGER: Logger = Logger::new();
+
+struct Logger {
+    ring: SpinLock<LogRing>,
+    callbacks: CallbackCell,
+    ready: AtomicBool,
+}
+
+impl Logger {
+    const fn new() -> Self {
+        Self {
+            ring: SpinLock::new(LogRing::new()),
+            callbacks: CallbackCell::new(LoggerCallbacks::default()),
+            ready: AtomicBool::new(false),
+        }
+    }
+
+    fn init(&self, callbacks: LoggerCallbacks) {
+        self.set_callbacks(callbacks);
+        self.ready.store(true, Ordering::Release);
+    }
+
+    fn set_callbacks(&self, callbacks: LoggerCallbacks) {
+        self.callbacks.set(callbacks);
+    }
+
+    fn record(&self, level: LogLevel, subsystem: &'static str, args: fmt::Arguments) {
+        let mut msg_buf = MsgBuf::new();
+        let _ = fmt::write(&mut msg_buf, args);
+
+        let cb = self.callbacks.get();
+        if self.ready.load(Ordering::Acquire) {
+            let msg_len = msg_buf.len as u16;
+            let msg_arr = msg_buf.as_array();
+            let record = LogRecord {
+                ts: (cb.timestamp)(),
+                level,
+                subsystem,
+                msg: msg_arr,
+                len: msg_len,
+                cpu_id: (cb.cpu_id)(),
+                tid: (cb.thread_id)(),
+            };
+
+            let mut ring = self.ring.lock();
+            ring.push(record);
+        } else {
+            // Early boot fallback: serial-only
+            let mut early = EarlyBuf::new();
+            let _ = early.write_prefix(level, subsystem);
+            let _ = early.write_str(msg_buf.as_str());
+            (cb.early_print)(early.as_str());
+        }
+    }
+
+    fn read(&self, out: &mut [UserLogRecord]) -> usize {
+        if out.is_empty() {
+            return 0;
+        }
+        let mut ring = self.ring.lock();
+        ring.copy_out(out)
+    }
+
+    fn ack(&self, count: usize) {
+        if count == 0 {
+            return;
+        }
+        let mut ring = self.ring.lock();
+        ring.ack(count);
+    }
+}
+
+// --------------------------------------------------------------------------
+// Ring buffer with minimal locking
+// --------------------------------------------------------------------------
+
+struct LogRing {
+    buf: [LogRecord; LOG_RING_SIZE],
+    head: usize,
+    tail: usize,
+    full: bool,
+}
+
+impl LogRing {
+    const fn new() -> Self {
+        Self {
+            buf: [LogRecord::empty(); LOG_RING_SIZE],
+            head: 0,
+            tail: 0,
+            full: false,
+        }
+    }
+
+    fn push(&mut self, record: LogRecord) {
+        self.buf[self.head] = record;
+        self.head = (self.head + 1) % LOG_RING_SIZE;
+
+        if self.full {
+            self.tail = self.head;
+        } else if self.head == self.tail {
+            self.full = true;
+        }
+    }
+
+    fn len(&self) -> usize {
+        if self.full {
+            LOG_RING_SIZE
+        } else if self.head >= self.tail {
+            self.head - self.tail
+        } else {
+            LOG_RING_SIZE - self.tail + self.head
+        }
+    }
+
+    fn copy_out(&self, out: &mut [UserLogRecord]) -> usize {
+        let available = self.len();
+        let count = core::cmp::min(available, out.len());
+
+        for i in 0..count {
+            let idx = (self.tail + i) % LOG_RING_SIZE;
+            out[i] = UserLogRecord::from_kernel(&self.buf[idx]);
+        }
+        count
+    }
+
+    fn ack(&mut self, count: usize) {
+        let available = self.len();
+        let to_drop = core::cmp::min(count, available);
+        if to_drop == LOG_RING_SIZE {
+            self.tail = self.head;
+            self.full = false;
+        } else {
+            self.tail = (self.tail + to_drop) % LOG_RING_SIZE;
+            self.full = false;
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
+// Minimal spin lock
+// --------------------------------------------------------------------------
+
+pub struct SpinLock<T> {
+    lock: AtomicBool,
+    data: UnsafeCell<T>,
+}
+
+unsafe impl<T: Send> Send for SpinLock<T> {}
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+pub struct SpinLockGuard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        Self {
+            lock: AtomicBool::new(false),
+            data: UnsafeCell::new(value),
+        }
+    }
+
+    pub fn lock(&self) -> SpinLockGuard<'_, T> {
+        while self
+            .lock
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            while self.lock.load(Ordering::Relaxed) {
+                core::hint::spin_loop();
+            }
+        }
+        SpinLockGuard { lock: self }
+    }
+}
+
+impl<T> Drop for SpinLockGuard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.lock.store(false, Ordering::Release);
+    }
+}
+
+impl<T> core::ops::Deref for SpinLockGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.lock.data.get() }
+    }
+}
+
+impl<T> core::ops::DerefMut for SpinLockGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.lock.data.get() }
+    }
+}
+
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+
+struct MsgBuf {
+    buf: [u8; LOG_MSG_MAX],
+    len: usize,
+}
+
+impl MsgBuf {
+    fn new() -> Self {
+        Self {
+            buf: [0; LOG_MSG_MAX],
+            len: 0,
+        }
+    }
+
+    fn as_array(&self) -> [u8; LOG_MSG_MAX] {
+        self.buf
+    }
+
+    fn as_str(&self) -> &str {
+        unsafe { core::str::from_utf8_unchecked(&self.buf[..self.len]) }
+    }
+}
+
+impl fmt::Write for MsgBuf {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for b in s.as_bytes() {
+            if self.len < LOG_MSG_MAX {
+                self.buf[self.len] = *b;
+                self.len += 1;
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+struct EarlyBuf {
+    buf: [u8; LOG_MSG_MAX + LOG_SUBSYS_MAX + 16],
+    len: usize,
+}
+
+impl EarlyBuf {
+    fn new() -> Self {
+        Self {
+            buf: [0; LOG_MSG_MAX + LOG_SUBSYS_MAX + 16],
+            len: 0,
+        }
+    }
+
+    fn write_prefix(&mut self, level: LogLevel, subsystem: &'static str) -> fmt::Result {
+        let _ = self.write_str("[");
+        let _ = self.write_str(level.as_str());
+        let _ = self.write_str("][");
+        self.write_str(subsystem)?;
+        self.write_str("] ")
+    }
+
+    fn as_str(&self) -> &str {
+        unsafe { core::str::from_utf8_unchecked(&self.buf[..self.len]) }
+    }
+}
+
+impl fmt::Write for EarlyBuf {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for b in s.as_bytes() {
+            if self.len < self.buf.len() {
+                self.buf[self.len] = *b;
+                self.len += 1;
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+struct CallbackCell {
+    value: UnsafeCell<LoggerCallbacks>,
+}
+
+unsafe impl Sync for CallbackCell {}
+
+impl CallbackCell {
+    const fn new(cb: LoggerCallbacks) -> Self {
+        Self {
+            value: UnsafeCell::new(cb),
+        }
+    }
+
+    fn set(&self, cb: LoggerCallbacks) {
+        unsafe {
+            *self.value.get() = cb;
+        }
+    }
+
+    fn get(&self) -> LoggerCallbacks {
+        unsafe { *self.value.get() }
+    }
+}

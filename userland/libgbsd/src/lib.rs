@@ -11,17 +11,18 @@ pub mod ipc;
 pub mod error;
 pub mod fs;
 pub mod device;
+pub mod log;
 
 pub use error::{Error, Result};
 pub use syscall::*;
 pub use ipc::*;
 pub use fs::*;
 pub use device::*;
+pub use log::*;
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     syscall::exit(1);
 }
-
 

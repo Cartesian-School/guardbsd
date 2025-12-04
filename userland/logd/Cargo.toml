@@ -1,14 +1,14 @@
 [package]
-name = "libgbsd"
+name = "logd"
 version = "1.0.0"
 edition = "2021"
 authors = ["Siergej Sobolewski <siergej@cartesianschool.org>"]
 license = "BSD-3-Clause"
 
-[lib]
-name = "gbsd"
-path = "src/lib.rs"
-crate-type = ["staticlib", "rlib"]
+[[bin]]
+name = "logd"
+path = "src/main.rs"
 
 [dependencies]
+gbsd = { package = "libgbsd", path = "../libgbsd" }
 kernel_log = { path = "../../kernel/log" }

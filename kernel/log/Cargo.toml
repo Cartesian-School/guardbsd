@@ -1,0 +1,14 @@
+[package]
+name = "kernel_log"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+[features]
+default = []
+
+[dependencies]

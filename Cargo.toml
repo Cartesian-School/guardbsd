@@ -10,6 +10,7 @@ resolver = "2"
 
 # List of active project components
 members = [
+    "kernel/log",
     "kernel/boot_stub",
     "kernel/microkernels/uk_ipc",
     "kernel/microkernels/uk_time",
@@ -27,6 +28,7 @@ members = [
     "userland/shell",
     "userland/vfstest",
     "userland/devtest",
+    "userland/logd",
     
     # Future components (uncomment when initialized):
     # "servers/netd",
