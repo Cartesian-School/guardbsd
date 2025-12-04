@@ -34,13 +34,14 @@ pub const SYS_IPC_RECV: usize = 32;
 
 const ENOSYS: isize = -38;
 const ENOENT: isize = -2;
+const EINVAL: isize = -22;
 
 pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
     match syscall_num {
         SYS_EXIT => sys_exit(arg1 as i32),
         SYS_WRITE => sys_write(arg1, arg2 as *const u8, arg3),
         SYS_READ => ENOSYS,
-        SYS_EXEC => sys_exec(arg1 as u64),
+        SYS_EXEC => sys_exec(arg1 as *const u8),
         SYS_YIELD => ENOSYS,
         SYS_GETPID => sys_getpid(),
         SYS_FORK => ENOSYS,
@@ -86,14 +87,15 @@ fn sys_read(_fd: usize, _buf: *mut u8, _len: usize) -> isize {
     ENOSYS
 }
 
-fn sys_exec(path_ptr: u64) -> isize {
-    // TODO: replace with real exec once task model and user entry are wired.
-    const MAX_PATH_LEN: usize = 128;
+fn sys_exec(path_ptr: *const u8) -> isize {
+    const MAX_PATH_LEN: usize = 64;
+    if path_ptr.is_null() {
+        return EINVAL;
+    }
     let mut buf = [0u8; MAX_PATH_LEN];
     let mut i = 0usize;
-
     while i < MAX_PATH_LEN {
-        let c = unsafe { *(path_ptr as *const u8).add(i) };
+        let c = unsafe { *path_ptr.add(i) };
         buf[i] = c;
         if c == 0 {
             break;
@@ -104,10 +106,16 @@ fn sys_exec(path_ptr: u64) -> isize {
         buf[MAX_PATH_LEN - 1] = 0;
     }
 
-    const INIT_PATH: &[u8] = b"/bin/init\0";
-    const GSH_PATH: &[u8] = b"/bin/gsh\0";
+    const INIT_PATH: &[u8] = b"/bin/init";
+    const GSH_PATH: &[u8] = b"/bin/gsh";
 
-    if buf.starts_with(INIT_PATH) || buf.starts_with(GSH_PATH) {
+    let mut nul = 0;
+    while nul < buf.len() && buf[nul] != 0 {
+        nul += 1;
+    }
+    let path = &buf[..nul];
+
+    if path == INIT_PATH || path == GSH_PATH {
         0
     } else {
         ENOENT
@@ -115,8 +123,7 @@ fn sys_exec(path_ptr: u64) -> isize {
 }
 
 fn sys_getpid() -> isize {
-    // TODO: replace with real task model once wired
-    1
+    proc::current_pid() as isize
 }
 
 const COM1: u16 = 0x3F8;

@@ -7,6 +7,9 @@
 pub mod interrupts;
 pub mod boot;
 pub mod time;
+pub mod user_entry;
+
+pub use user_entry::enter_user_mode;
 
 /// Entry point reached from long_mode_entry.S after transitioning to 64-bit mode.
 #[no_mangle]
