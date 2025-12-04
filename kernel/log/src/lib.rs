@@ -29,6 +29,7 @@ pub enum LogLevel {
 
 impl LogLevel {
     #[inline]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             LogLevel::Trace => "TRACE",
@@ -55,6 +56,7 @@ pub struct LogRecord {
 }
 
 impl LogRecord {
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             ts: 0,
@@ -82,6 +84,7 @@ pub struct UserLogRecord {
 }
 
 impl UserLogRecord {
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             ts: 0,
@@ -110,8 +113,8 @@ impl UserLogRecord {
             level: rec.level,
             cpu_id: rec.cpu_id,
             tid: rec.tid,
-            msg_len: copy_len as u16,
-            subsystem_len: subsys_len as u8,
+            msg_len: u16::try_from(copy_len).unwrap_or(0),
+            subsystem_len: u8::try_from(subsys_len).unwrap_or(0),
             msg,
             subsystem,
         }
@@ -141,6 +144,7 @@ impl LoggerCallbacks {
         }
     }
 
+    #[must_use]
     pub const fn default() -> Self {
         Self {
             timestamp: default_timestamp,
@@ -157,10 +161,12 @@ pub fn default_timestamp() -> u64 {
     FALLBACK_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
+#[must_use]
 pub fn default_cpu_id() -> u8 {
     0
 }
 
+#[must_use]
 pub fn default_thread_id() -> ThreadId {
     0
 }
@@ -194,14 +200,15 @@ pub fn log(level: LogLevel, subsystem: &'static str, args: fmt::Arguments) {
 /// Read records from the kernel log ring buffer.
 /// Returns the number of records copied, or 0 if ring is busy.
 pub fn read_records(out: &mut [UserLogRecord]) -> usize {
-    match LOGGER.read(out) {
-        Ok(count) => count,
-        Err(()) => 0, // Ring busy (ISR contention) - return 0 records
-    }
+    LOGGER.read(out).unwrap_or_default()
 }
 
 /// Acknowledge records in the kernel log ring buffer.
-/// Returns Ok(()) on success, Err(()) if ring is busy.
+///
+/// # Errors
+///
+/// Returns `Err(())` if the ring buffer is busy.
+#[allow(clippy::result_unit_err)]
 pub fn ack_records(count: usize) -> Result<(), ()> {
     LOGGER.ack(count)
 }
@@ -298,7 +305,7 @@ impl Logger {
 
         let cb = self.callbacks.get();
         if self.ready.load(Ordering::Acquire) {
-            let msg_len = msg_buf.len as u16;
+            let msg_len = u16::try_from(msg_buf.len).unwrap_or(0);
             let msg_arr = msg_buf.as_array();
             let record = LogRecord {
                 ts: (cb.timestamp)(),
@@ -379,6 +386,7 @@ struct LogRing {
 impl LogRing {
     const fn new() -> Self {
         Self {
+            #[allow(clippy::large_stack_arrays)]
             buf: [LogRecord::empty(); LOG_RING_SIZE],
             head: 0,
             tail: 0,
@@ -388,7 +396,7 @@ impl LogRing {
 
     fn push(&mut self, record: LogRecord) {
         // Validate record before insertion
-        if record.len > LOG_MSG_MAX as u16 {
+        if record.len > u16::try_from(LOG_MSG_MAX).unwrap_or(u16::MAX) {
             // Error: record too large - use serial fallback
             // DO NOT call klog_* here to avoid recursion
             serial_error_print(b"[KLOG-ERR] record too large");
@@ -419,6 +427,7 @@ impl LogRing {
         let available = self.len();
         let count = core::cmp::min(available, out.len());
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..count {
             let idx = (self.tail + i) % LOG_RING_SIZE;
             out[i] = UserLogRecord::from_kernel(&self.buf[idx]);

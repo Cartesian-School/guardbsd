@@ -18,51 +18,81 @@ pub const IPC_FLAG_REJECT_SENDER: u64 = 1 << 3;
 // These are placeholder implementations that will be replaced
 // when IPC syscalls are added to the kernel.
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as IPC is not implemented.
 #[inline]
 pub fn port_create() -> Result<PortId> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as IPC is not implemented.
 #[inline]
 pub fn port_destroy(_port: PortId) -> Result<()> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as IPC is not implemented.
 #[inline]
 pub fn ipc_send(_port: PortId, _buffer: *const u8, _length: usize, _flags: u64) -> Result<()> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as IPC is not implemented.
 #[inline]
 pub fn ipc_recv(_port: PortId, _buffer: *mut u8, _length: usize, _flags: u64) -> Result<u64> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as IPC is not implemented.
 #[inline]
 pub fn port_send(port: PortId, buffer: *const u8, length: usize) -> Result<()> {
     ipc_send(port, buffer, length, 0)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as IPC is not implemented.
 #[inline]
 pub fn port_receive(port: PortId, buffer: *mut u8, length: usize) -> Result<u64> {
     ipc_recv(port, buffer, length, 0)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as capability management is not implemented.
 #[inline]
 pub fn cap_grant(_target_tid: u64, _cap: CapId) -> Result<()> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as capability management is not implemented.
 #[inline]
 pub fn cap_revoke(_cap: CapId) -> Result<()> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as capability management is not implemented.
 #[inline]
 pub fn cap_delegate(_cap: CapId, _rights: u64) -> Result<CapId> {
     Err(Error::NoSys)
 }
 
+/// # Errors
+///
+/// Always returns `Error::NoSys` as capability management is not implemented.
 #[inline]
 pub fn cap_copy(_cap: CapId) -> Result<CapId> {
     Err(Error::NoSys)

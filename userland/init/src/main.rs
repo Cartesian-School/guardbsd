@@ -1,5 +1,5 @@
 // userland/init/src/main.rs
-// GuardBSD init process: minimal bootstrap for ETAP 3.2
+// GuardBSD init process: minimal bootstrap
 
 #![no_std]
 #![no_main]
@@ -14,7 +14,8 @@ pub extern "C" fn _start() -> ! {
 fn init_main() -> ! {
     let pid = getpid().unwrap_or(0);
     println_pid("[INIT] pid=", pid);
-    println("[INIT] starting GuardBSD init");
+    println("[INIT] GuardBSD init started");
+    println("[INIT] exec /bin/gsh ...");
 
     let path = b"/bin/gsh\0";
     match exec(path) {

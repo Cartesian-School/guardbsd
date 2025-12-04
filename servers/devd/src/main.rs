@@ -29,7 +29,8 @@ fn devd_main() -> ! {
         let console_id = DEVICE_TABLE.register(DeviceType::Character, 1, 0); // console
         let device_count = if null_id.is_some() && console_id.is_some() { 2 } else { 0 };
 
-        klog_info!("devd", "device server online (devices={}, pid={})", device_count, getpid());
+        let pid = getpid().unwrap_or(0);
+        klog_info!("devd", "device server online (devices={}, pid={})", device_count, pid);
     }
 
     let port = match port_create() {

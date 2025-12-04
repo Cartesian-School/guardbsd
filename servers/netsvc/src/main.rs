@@ -26,7 +26,8 @@ pub extern "C" fn _start() -> ! {
 }
 
 fn netsvc_main() -> ! {
-    klog_info!("netsvc", "network services server starting (pid={})", getpid());
+    let pid = getpid().unwrap_or(0);
+    klog_info!("netsvc", "network services server starting (pid={})", pid);
 
     let port = match port_create() {
         Ok(p) => {

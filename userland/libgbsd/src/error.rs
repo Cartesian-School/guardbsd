@@ -20,10 +20,10 @@ pub enum Error {
 }
 
 impl Error {
+    #[must_use]
     pub fn from_code(code: u64) -> Self {
         match code {
             0 => Error::Ok,
-            0xFFFF_FFFF_0000_0001 => Error::Invalid,
             0xFFFF_FFFF_0000_0002 => Error::NoMemory,
             0xFFFF_FFFF_0000_0003 => Error::PortInvalid,
             0xFFFF_FFFF_0000_0004 => Error::PortFull,
@@ -37,6 +37,7 @@ impl Error {
         }
     }
 
+    #[must_use]
     pub fn is_ok(&self) -> bool {
         matches!(self, Error::Ok)
     }

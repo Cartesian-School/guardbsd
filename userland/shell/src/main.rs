@@ -16,8 +16,9 @@ pub extern "C" fn _start() -> ! {
 
 fn shell_main() -> ! {
     let pid = getpid().unwrap_or(0);
-    print_pid(b"gsh: pid=", pid);
+    print_pid(b"[GSH] pid=", pid);
     let _ = println(b" interactive shell started");
+    let _ = println(b"[GSH] interactive shell ready");
     let _ = println(b"gsh>");
     loop {
         // Stay alive; no read/yield calls yet (still ENOSYS).
@@ -70,4 +71,9 @@ fn write_num(out: &mut [u8], mut pos: usize, mut val: u64) -> usize {
         }
     }
     pos
+}
+
+fn println(buf: &[u8]) {
+    let _ = gbsd::write(1, buf);
+    let _ = gbsd::write(1, b"\n");
 }

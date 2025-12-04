@@ -44,7 +44,7 @@ fn logd_main() -> ! {
     let mut rotator = LogRotator::new(config);
 
     // THIRD: Register ourselves as the logging daemon
-    let pid = getpid();
+    let pid = getpid().unwrap_or(0);
     let log_syscalls = register_kernel_log_daemon(pid).is_ok();
 
     // FOURTH: Log file output (placeholder - filesystem not implemented)

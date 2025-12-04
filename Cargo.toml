@@ -11,10 +11,6 @@ resolver = "2"
 # List of active project components
 members = [
     "kernel/log",
-    "kernel/boot_stub",
-    "kernel/microkernels/uk_ipc",
-    "kernel/microkernels/uk_time",
-    "kernel/microkernels/uk_space",
     "tests",
     "servers/init",
     "servers/vfs",
@@ -26,13 +22,17 @@ members = [
     "drivers/storage",
     "userland/libgbsd",
     "userland/shell",
-    "userland/vfstest",
     "userland/devtest",
     "userland/logd",
     "userland/init",
     
     # Future components (uncomment when initialized):
     # "servers/netd",
+]
+
+# Default host builds should avoid freestanding binaries; limit to lib-only crates.
+default-members = [
+    "userland/libgbsd",
 ]
 
 # Exclude build tools or documentation from workspace analysis

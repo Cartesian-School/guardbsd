@@ -24,8 +24,9 @@ pub extern "C" fn _start() -> ! {
 fn ramfs_main() -> ! {
     unsafe {
         RAMFS.init();
+        let pid = getpid().unwrap_or(0);
         klog_info!("ramfs", "RAMFS mounted (nodes={}, max_file={}, pid={})",
-                   RAMFS.node_count(), 4096, getpid());
+                   RAMFS.node_count(), 4096, pid);
     }
 
     let port = match port_create() {

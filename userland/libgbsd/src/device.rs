@@ -4,7 +4,7 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 pub type DevId = u32;
 
@@ -22,6 +22,7 @@ pub struct DevRequest {
 }
 
 impl DevRequest {
+    #[must_use]
     pub const fn new(op: u32, dev_id: u32, major: u16, minor: u16, flags: u32) -> Self {
         Self {
             op,
@@ -32,6 +33,8 @@ impl DevRequest {
         }
     }
 
+    #[must_use]
+    #[allow(clippy::ptr_as_ptr, clippy::ref_as_ptr)]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(
@@ -42,6 +45,9 @@ impl DevRequest {
     }
 }
 
+/// # Errors
+///
+/// Currently always succeeds, but may return an error when IPC is implemented.
 #[inline]
 pub fn dev_register(dev_type: u32, major: u16, minor: u16) -> Result<DevId> {
     let req = DevRequest::new(1, 0, major, minor, dev_type);
@@ -50,6 +56,9 @@ pub fn dev_register(dev_type: u32, major: u16, minor: u16) -> Result<DevId> {
     Ok(0)
 }
 
+/// # Errors
+///
+/// Currently always succeeds, but may return an error when IPC is implemented.
 #[inline]
 pub fn dev_unregister(dev_id: DevId) -> Result<()> {
     let req = DevRequest::new(2, dev_id, 0, 0, 0);
@@ -58,6 +67,9 @@ pub fn dev_unregister(dev_id: DevId) -> Result<()> {
     Ok(())
 }
 
+/// # Errors
+///
+/// Currently always succeeds, but may return an error when IPC is implemented.
 #[inline]
 pub fn dev_open(dev_id: DevId) -> Result<DevId> {
     let req = DevRequest::new(3, dev_id, 0, 0, 0);
@@ -66,6 +78,9 @@ pub fn dev_open(dev_id: DevId) -> Result<DevId> {
     Ok(dev_id)
 }
 
+/// # Errors
+///
+/// Currently always succeeds, but may return an error when IPC is implemented.
 #[inline]
 pub fn dev_close(dev_id: DevId) -> Result<()> {
     let req = DevRequest::new(4, dev_id, 0, 0, 0);

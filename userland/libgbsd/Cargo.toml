@@ -9,6 +9,8 @@ license = "BSD-3-Clause"
 name = "gbsd"
 path = "src/lib.rs"
 crate-type = ["staticlib", "rlib"]
+test = false
+bench = false
 
 [dependencies]
 kernel_log = { path = "../../kernel/log" }

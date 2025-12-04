@@ -24,7 +24,8 @@ fn vfs_main() -> ! {
     // Create VFS service port
     let port = match port_create() {
         Ok(p) => {
-            klog_info!("vfs", "VFS server started (port={}, pid={})", p, getpid());
+            let pid = getpid().unwrap_or(0);
+            klog_info!("vfs", "VFS server started (port={}, pid={})", p, pid);
             p
         }
         Err(_) => {
