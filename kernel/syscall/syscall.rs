@@ -3,6 +3,7 @@
 
 #![no_std]
 use crate::proc;
+use crate::prog::init_bin::INIT_BIN;
 
 // Canonical syscall table for ETAP 3.2
 // Implemented: exit (0), write (1)
@@ -89,9 +90,9 @@ fn sys_read(_fd: usize, _buf: *mut u8, _len: usize) -> isize {
 
 #[cfg(target_arch = "x86_64")]
 fn sys_exec(path_ptr: *const u8) -> isize {
-    // Minimal exec for ETAP 3.3 on x86_64:
+    // Minimal exec for ETAP 3.4 on x86_64:
     // - Accepts only /bin/init
-    // - Jumps to INIT_ENTRY in user mode and never returns on success
+    // - Loads flat INIT_BIN and enters user mode; never returns on success
     const MAX_PATH_LEN: usize = 64;
     if path_ptr.is_null() {
         return EINVAL;
@@ -119,15 +120,17 @@ fn sys_exec(path_ptr: *const u8) -> isize {
     let path = &buf[..nul];
 
     if path == INIT_PATH {
-        unsafe {
-            const USER_STACK_TOP: u64 = 0x8000_0000;
-            crate::proc::set_current_pid(1);
-            crate::arch::x86_64::enter_user_mode(crate::prog::init_bin::INIT_ENTRY, USER_STACK_TOP);
+        match proc::load_flat_program(INIT_BIN) {
+            Ok((entry, user_sp)) => {
+                proc::start_first_user_task(entry, user_sp);
+            }
+            Err(e) => {
+                return e;
+            }
         }
-        ENOSYS
-    } else {
-        ENOENT
     }
+
+    ENOENT
 }
 
 #[cfg(not(target_arch = "x86_64"))]
