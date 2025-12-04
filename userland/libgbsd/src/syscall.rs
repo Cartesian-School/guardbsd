@@ -26,6 +26,11 @@ pub const SYS_LOG_READ: u64 = 40;
 pub const SYS_LOG_ACK: u64 = 41;
 pub const SYS_LOG_REGISTER_DAEMON: u64 = 42;
 pub const SYS_GETPID: u64 = 7;
+pub const SYS_EXEC: u64 = 20;
+pub const SYS_STAT: u64 = 8;
+pub const SYS_RENAME: u64 = 9;
+pub const SYS_UNLINK: u64 = 10;
+pub const SYS_SYNC: u64 = 11;
 
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
@@ -190,4 +195,12 @@ pub fn getpid() -> u64 {
     unsafe {
         syscall0(SYS_GETPID)
     }
+}
+
+#[inline(always)]
+pub fn exec(path: &[u8]) -> ! {
+    unsafe {
+        syscall1(SYS_EXEC, path.as_ptr() as u64);
+    }
+    loop {} // Should never reach here
 }

@@ -56,3 +56,76 @@ pub fn write(fd: Fd, buf: &[u8]) -> Result<usize> {
         Ok(ret as usize)
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct Stat {
+    pub size: u64,
+    pub mode: u32,
+    pub mtime: u64,
+}
+
+#[inline]
+pub fn stat(path: &[u8]) -> Result<Stat> {
+    let mut stat_buf = [0u64; 3]; // size, mode, mtime
+    let ret = unsafe {
+        syscall3(SYS_STAT, path.as_ptr() as u64, stat_buf.as_mut_ptr() as u64, stat_buf.len() as u64)
+    };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(Stat {
+            size: stat_buf[0],
+            mode: stat_buf[1] as u32,
+            mtime: stat_buf[2],
+        })
+    }
+}
+
+#[inline]
+pub fn rename(old_path: &[u8], new_path: &[u8]) -> Result<()> {
+    let ret = unsafe { syscall2(SYS_RENAME, old_path.as_ptr() as u64, new_path.as_ptr() as u64) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(())
+    }
+}
+
+#[inline]
+pub fn unlink(path: &[u8]) -> Result<()> {
+    let ret = unsafe { syscall1(SYS_UNLINK, path.as_ptr() as u64) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(())
+    }
+}
+
+#[inline]
+pub fn sync(fd: Fd) -> Result<()> {
+    let ret = unsafe { syscall1(SYS_SYNC, fd) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(Error::from_code((-ret_i64) as u64))
+    } else {
+        Ok(())
+    }
+}
+
+#[inline]
+pub fn mkdir(_path: &[u8]) -> Result<()> {
+    // VFS mkdir operation via IPC
+    // This is a placeholder implementation for the current development stage
+    //
+    // Real implementation would:
+    // 1. Look up VFS server port (service discovery)
+    // 2. Send IPC message: [op=6, path...]
+    // 3. Wait for response and return appropriate error code
+    //
+    // For now, we assume directories are created by the underlying filesystem
+    // when files are opened with O_CREAT
+    Ok(())
+}

@@ -7,10 +7,16 @@
 use gbsd::*;
 use kernel_log::{UserLogRecord, LOG_MSG_MAX, LOG_SUBSYS_MAX};
 
+mod config;
+mod rotate;
+
+use config::LogdConfig;
+use rotate::LogRotator;
+
 const STDOUT: Fd = 1;
 const LOG_BATCH: usize = 16;
 const LINE_CAP: usize = LOG_MSG_MAX + LOG_SUBSYS_MAX + 64;
-const LOG_PATH: &[u8] = b"/var/log/kernel.log\0";
+const CONFIG_PATH: &[u8] = b"/etc/logd.conf\0";
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -18,25 +24,46 @@ pub extern "C" fn _start() -> ! {
 }
 
 fn logd_main() -> ! {
-    // FIRST: Register ourselves as the logging daemon
+    // FIRST: Load configuration
+    let mut config = LogdConfig::default();
+    let config_loaded = config.load_from_file(CONFIG_PATH).is_ok();
+
+    if config_loaded {
+        // Log config loading success (but don't use klog_* to avoid recursion)
+        let mut msg = [0u8; 64];
+        let len = format_config_msg(&mut msg, "configuration loaded");
+        let _ = write(STDOUT, &msg[..len]);
+    } else {
+        // Log config fallback (but don't use klog_* to avoid recursion)
+        let mut msg = [0u8; 64];
+        let len = format_config_msg(&mut msg, "using defaults");
+        let _ = write(STDOUT, &msg[..len]);
+    }
+
+    // SECOND: Create log rotator
+    let rotator = LogRotator::new(config);
+
+    // THIRD: Register ourselves as the logging daemon
     let pid = getpid();
     if let Err(_) = register_kernel_log_daemon(pid) {
         // Registration failed - exit
         exit(1);
     }
 
-    // SECOND: Try to create log directory and open log file
+    // FOURTH: Open log file
     let mut log_fd: Option<Fd> = None;
-
-    // Try to create /var/log directory (this may fail if VFS is not ready)
-    // For now, just try to open the log file directly
-    if let Ok(fd) = open(LOG_PATH, O_CREAT | O_WRONLY) {
+    if let Ok(fd) = open(&config.log_file[..config.log_file_len], O_CREAT | O_WRONLY) {
         log_fd = Some(fd);
+
+        // Log successful startup (but don't use klog_* to avoid recursion)
+        let mut msg = [0u8; 64];
+        let len = format_config_msg(&mut msg, "online with rotation");
+        let _ = write(STDOUT, &msg[..len]);
     }
-    // If file open fails, we'll fall back to stdout only
 
     let mut records = [UserLogRecord::empty(); LOG_BATCH];
     let mut line = [0u8; LINE_CAP];
+    let mut last_flush = 0u64;
 
     loop {
         let count = match read_kernel_logs(&mut records) {
@@ -46,17 +73,47 @@ fn logd_main() -> ! {
 
         if count > 0 {
             for rec in records.iter().take(count) {
+                // Check if we should log this level
+                if !config.should_log(rec.level) {
+                    continue;
+                }
+
                 let len = format_record(rec, &mut line);
+
+                // Write to stdout
                 let _ = write(STDOUT, &line[..len]);
+
+                // Write to log file if available
                 if let Some(fd) = log_fd {
+                    // Check if rotation is needed before writing
+                    let log_path = &config.log_file[..config.log_file_len];
+                    let _ = rotator.check_and_rotate(log_path);
+
                     let _ = write(fd, &line[..len]);
                 }
             }
             let _ = ack_kernel_logs(count);
+
+            // Periodic flush
+            let now = last_flush.wrapping_add(1); // Simple counter for now
+            if now.wrapping_sub(last_flush) >= config.flush_interval_ms as u64 {
+                if let Some(fd) = log_fd {
+                    let _ = rotate::fs_sync(fd);
+                }
+                last_flush = now;
+            }
         } else {
             cpu_relax();
         }
     }
+}
+
+fn format_config_msg(out: &mut [u8], msg: &str) -> usize {
+    let mut pos = 0;
+    pos = push(out, pos, b"[INIT] logd ");
+    pos = push(out, pos, msg.as_bytes());
+    pos = push(out, pos, b"\n");
+    pos
 }
 
 fn format_record(rec: &UserLogRecord, out: &mut [u8]) -> usize {
