@@ -87,7 +87,11 @@ fn sys_read(_fd: usize, _buf: *mut u8, _len: usize) -> isize {
     ENOSYS
 }
 
+#[cfg(target_arch = "x86_64")]
 fn sys_exec(path_ptr: *const u8) -> isize {
+    // Minimal exec for ETAP 3.3 on x86_64:
+    // - Accepts only /bin/init
+    // - Jumps to INIT_ENTRY in user mode and never returns on success
     const MAX_PATH_LEN: usize = 64;
     if path_ptr.is_null() {
         return EINVAL;
@@ -107,7 +111,6 @@ fn sys_exec(path_ptr: *const u8) -> isize {
     }
 
     const INIT_PATH: &[u8] = b"/bin/init";
-    const GSH_PATH: &[u8] = b"/bin/gsh";
 
     let mut nul = 0;
     while nul < buf.len() && buf[nul] != 0 {
@@ -115,11 +118,36 @@ fn sys_exec(path_ptr: *const u8) -> isize {
     }
     let path = &buf[..nul];
 
-    if path == INIT_PATH || path == GSH_PATH {
-        0
+    if path == INIT_PATH {
+        unsafe {
+            const USER_STACK_TOP: u64 = 0x8000_0000;
+            crate::proc::set_current_pid(1);
+            crate::arch::x86_64::enter_user_mode(crate::prog::init_bin::INIT_ENTRY, USER_STACK_TOP);
+        }
+        ENOSYS
     } else {
         ENOENT
     }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn sys_exec(_path_ptr: *const u8) -> isize {
+    ENOSYS
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "exec_boot_test"))]
+pub fn kernel_exec_smoke_test() -> ! {
+    static INIT_PATH: &[u8] = b"/bin/init\0";
+    let ret = sys_exec(INIT_PATH.as_ptr());
+    if ret < 0 {
+        unsafe {
+            let msg = b"[EXEC-TEST] sys_exec(\"/bin/init\") failed\n";
+            for &b in msg {
+                serial_putc(b);
+            }
+        }
+    }
+    loop {}
 }
 
 fn sys_getpid() -> isize {

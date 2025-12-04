@@ -15,20 +15,7 @@ fn init_main() -> ! {
     let pid = getpid().unwrap_or(0);
     println_pid("[INIT] pid=", pid);
     println("[INIT] starting GuardBSD init");
-
-    let path = b"/bin/gsh\0";
-    match exec(path) {
-        Ok(_) => {
-            println("[INIT] exec('/bin/gsh') succeeded");
-            loop {
-                cpu_relax();
-            }
-        }
-        Err(_) => {
-            println("[INIT] exec('/bin/gsh') failed");
-            exit(1);
-        }
-    }
+    loop {}
 }
 
 fn println(msg: &str) {

@@ -29,9 +29,7 @@ pub fn set_current_pid(pid: u32) {
 /// For now, assumes a single task (PID 1) and never returns.
 pub fn start_first_user_task(entry: u64, user_sp: u64) -> ! {
     set_current_pid(1);
-    unsafe {
-        enter_user_mode(entry, user_sp);
-    }
+    unsafe { enter_user_mode(entry, user_sp); }
 }
 
 #[cfg(feature = "user_mode_test")]

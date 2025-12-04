@@ -14,6 +14,20 @@ pub use user_entry::enter_user_mode;
 /// Entry point reached from long_mode_entry.S after transitioning to 64-bit mode.
 #[no_mangle]
 pub extern "C" fn kernel_main_x86_64() -> ! {
+    // Build & run user-mode smoke test:
+    //   cargo build --release --features user_mode_test
+    // Expected: jumps to dummy_user_entry() in user mode and spins.
+    #[cfg(feature = "user_mode_test")]
+    {
+        crate::proc::test_enter_user_mode();
+    }
+
+    #[cfg(feature = "exec_boot_test")]
+    {
+        // This will call sys_exec("/bin/init") from kernel and drop to user mode.
+        crate::syscall::kernel_exec_smoke_test();
+    }
+
     // Initialize GDT/IDT (64-bit skeleton)
     interrupts::gdt64::init_gdt64();
     interrupts::idt64::init_idt64();
