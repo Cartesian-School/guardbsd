@@ -1,22 +1,53 @@
 // kernel/sched/mod.rs
-// Preemptive scheduler core (arch-neutral)
+// Preemptive scheduler core with arch contexts
 // BSD 3-Clause License
 
 #![no_std]
 
 use core::cmp::min;
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
-// ---------------------------------------------------------------------------
-// Basic Types
-// ---------------------------------------------------------------------------
+#[cfg(target_arch = "x86_64")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ArchContext {
+    pub r15: u64,
+    pub r14: u64,
+    pub r13: u64,
+    pub r12: u64,
+    pub r11: u64,
+    pub r10: u64,
+    pub r9: u64,
+    pub r8: u64,
+    pub rdi: u64,
+    pub rsi: u64,
+    pub rbp: u64,
+    pub rbx: u64,
+    pub rdx: u64,
+    pub rcx: u64,
+    pub rax: u64,
+    pub rsp: u64,
+    pub rip: u64,
+    pub rflags: u64,
+    pub cs: u64,
+    pub ss: u64,
+    pub cr3: u64,
+    pub mode_flags: u64,
+}
 
-pub const MAX_CPUS: usize = 64;
-pub const MAX_THREADS: usize = 256;
-pub const MAX_PRIORITY: usize = 4;
-pub const DEFAULT_TIME_SLICE_TICKS: u64 = 5;
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ArchContext {
+    pub x: [u64; 31],
+    pub sp: u64,
+    pub elr: u64,
+    pub spsr: u64,
+    pub ttbr0: u64,
+    pub esr: u64,
+}
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ThreadState {
     New,
     Ready,
@@ -26,35 +57,16 @@ pub enum ThreadState {
     Zombie,
 }
 
-#[derive(Copy, Clone)]
-pub struct Context {
-    pub gpr: [u64; 31],
-    pub sp: u64,
-    pub pc: u64,
-    pub flags: u64,
-}
-
-impl Context {
-    pub const fn zeroed() -> Self {
-        Self {
-            gpr: [0; 31],
-            sp: 0,
-            pc: 0,
-            flags: 0,
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub struct Tcb {
-    pub tid: u64,
-    pub pid: u64,
+    pub tid: usize,
+    pub pid: usize,
     pub state: ThreadState,
     pub priority: usize,
     pub time_slice: u64,
-    pub context: Context,
     pub wake_tick: u64,
-    pub cpu_affinity: Option<usize>,
+    pub cpu_affinity: usize,
+    pub ctx: ArchContext,
     pub next: Option<usize>,
 }
 
@@ -66,16 +78,80 @@ impl Tcb {
             state: ThreadState::New,
             priority: 1,
             time_slice: DEFAULT_TIME_SLICE_TICKS,
-            context: Context::zeroed(),
             wake_tick: 0,
-            cpu_affinity: None,
+            cpu_affinity: 0,
+            ctx: ArchContext::zeroed(),
             next: None,
         }
     }
 }
 
+impl ArchContext {
+    pub const fn zeroed() -> Self {
+        Self {
+            #[cfg(target_arch = "x86_64")]
+            r15: 0,
+            #[cfg(target_arch = "x86_64")]
+            r14: 0,
+            #[cfg(target_arch = "x86_64")]
+            r13: 0,
+            #[cfg(target_arch = "x86_64")]
+            r12: 0,
+            #[cfg(target_arch = "x86_64")]
+            r11: 0,
+            #[cfg(target_arch = "x86_64")]
+            r10: 0,
+            #[cfg(target_arch = "x86_64")]
+            r9: 0,
+            #[cfg(target_arch = "x86_64")]
+            r8: 0,
+            #[cfg(target_arch = "x86_64")]
+            rdi: 0,
+            #[cfg(target_arch = "x86_64")]
+            rsi: 0,
+            #[cfg(target_arch = "x86_64")]
+            rbp: 0,
+            #[cfg(target_arch = "x86_64")]
+            rbx: 0,
+            #[cfg(target_arch = "x86_64")]
+            rdx: 0,
+            #[cfg(target_arch = "x86_64")]
+            rcx: 0,
+            #[cfg(target_arch = "x86_64")]
+            rax: 0,
+            #[cfg(target_arch = "x86_64")]
+            rsp: 0,
+            #[cfg(target_arch = "x86_64")]
+            rip: 0,
+            #[cfg(target_arch = "x86_64")]
+            rflags: 0x202,
+            #[cfg(target_arch = "x86_64")]
+            cs: 0x8,
+            #[cfg(target_arch = "x86_64")]
+            ss: 0x10,
+            #[cfg(target_arch = "x86_64")]
+            cr3: 0,
+            #[cfg(target_arch = "x86_64")]
+            mode_flags: 0,
+
+            #[cfg(target_arch = "aarch64")]
+            x: [0; 31],
+            #[cfg(target_arch = "aarch64")]
+            sp: 0,
+            #[cfg(target_arch = "aarch64")]
+            elr: 0,
+            #[cfg(target_arch = "aarch64")]
+            spsr: 0,
+            #[cfg(target_arch = "aarch64")]
+            ttbr0: 0,
+            #[cfg(target_arch = "aarch64")]
+            esr: 0,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
-// SpinLock
+// Spin lock
 // ---------------------------------------------------------------------------
 
 pub struct SpinLock<T> {
@@ -87,10 +163,10 @@ unsafe impl<T: Send> Send for SpinLock<T> {}
 unsafe impl<T: Send> Sync for SpinLock<T> {}
 
 impl<T> SpinLock<T> {
-    pub const fn new(data: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self {
             flag: core::sync::atomic::AtomicBool::new(false),
-            data: core::cell::UnsafeCell::new(data),
+            data: core::cell::UnsafeCell::new(value),
         }
     }
 
@@ -132,14 +208,18 @@ impl<T> core::ops::DerefMut for SpinLockGuard<'_, T> {
 }
 
 // ---------------------------------------------------------------------------
-// Run queue
+// Scheduler core
 // ---------------------------------------------------------------------------
+
+pub const MAX_CPUS: usize = 64;
+pub const MAX_THREADS: usize = 256;
+pub const MAX_PRIORITY: usize = 4;
+pub const DEFAULT_TIME_SLICE_TICKS: u64 = 5;
 
 #[derive(Copy, Clone)]
 struct RunQueue {
     heads: [Option<usize>; MAX_PRIORITY],
     tails: [Option<usize>; MAX_PRIORITY],
-    len: usize,
 }
 
 impl RunQueue {
@@ -147,60 +227,46 @@ impl RunQueue {
         Self {
             heads: [None; MAX_PRIORITY],
             tails: [None; MAX_PRIORITY],
-            len: 0,
         }
     }
 
-    fn push(&mut self, tcb_pool: &mut [Tcb; MAX_THREADS], idx: usize) {
-        let prio = min(tcb_pool[idx].priority, MAX_PRIORITY - 1);
-        tcb_pool[idx].next = None;
-        match self.tails[prio] {
-            Some(tail_idx) => {
-                tcb_pool[tail_idx].next = Some(idx);
-            }
-            None => {
-                self.heads[prio] = Some(idx);
-            }
+    fn push(&mut self, tcb: &mut [Tcb; MAX_THREADS], idx: usize) {
+        let p = min(tcb[idx].priority, MAX_PRIORITY - 1);
+        tcb[idx].next = None;
+        if let Some(t) = self.tails[p] {
+            tcb[t].next = Some(idx);
+        } else {
+            self.heads[p] = Some(idx);
         }
-        self.tails[prio] = Some(idx);
-        self.len += 1;
+        self.tails[p] = Some(idx);
     }
 
-    fn pop(&mut self, tcb_pool: &mut [Tcb; MAX_THREADS]) -> Option<usize> {
+    fn pop(&mut self, tcb: &mut [Tcb; MAX_THREADS]) -> Option<usize> {
         for prio in (0..MAX_PRIORITY).rev() {
-            if let Some(head_idx) = self.heads[prio] {
-                let next = tcb_pool[head_idx].next;
-                self.heads[prio] = next;
-                if next.is_none() {
+            if let Some(h) = self.heads[prio] {
+                let nxt = tcb[h].next;
+                self.heads[prio] = nxt;
+                if nxt.is_none() {
                     self.tails[prio] = None;
                 }
-                tcb_pool[head_idx].next = None;
-                self.len -= 1;
-                return Some(head_idx);
+                tcb[h].next = None;
+                return Some(h);
             }
         }
         None
     }
-
-    fn is_empty(&self) -> bool {
-        self.len == 0
-    }
 }
 
-// ---------------------------------------------------------------------------
-// Per-CPU scheduler state
-// ---------------------------------------------------------------------------
-
-struct CpuScheduler {
+struct CpuSched {
     current: Option<usize>,
-    runqueue: RunQueue,
+    rq: RunQueue,
 }
 
-impl CpuScheduler {
+impl CpuSched {
     const fn new() -> Self {
         Self {
             current: None,
-            runqueue: RunQueue::new(),
+            rq: RunQueue::new(),
         }
     }
 }
@@ -210,7 +276,7 @@ struct Scheduler {
     ticks: AtomicU64,
     next_tid: AtomicUsize,
     tcbs: [Tcb; MAX_THREADS],
-    cpus: [CpuScheduler; MAX_CPUS],
+    cpus: [CpuSched; MAX_CPUS],
 }
 
 static SCHED: SpinLock<Scheduler> = SpinLock::new(Scheduler {
@@ -218,170 +284,201 @@ static SCHED: SpinLock<Scheduler> = SpinLock::new(Scheduler {
     ticks: AtomicU64::new(0),
     next_tid: AtomicUsize::new(1),
     tcbs: [Tcb::empty(); MAX_THREADS],
-    cpus: [CpuScheduler::new(); MAX_CPUS],
+    cpus: [CpuSched::new(); MAX_CPUS],
 });
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-pub fn init(tick_hz: u64) {
-    let mut sched = SCHED.lock();
-    sched.tick_hz = tick_hz;
+extern "C" {
+    fn arch_context_switch(old: *mut ArchContext, new: *const ArchContext);
 }
 
-pub fn register_thread(pid: u64, priority: usize, cpu_hint: Option<usize>) -> Option<usize> {
-    let mut sched = SCHED.lock();
-    let tid = sched.next_tid.fetch_add(1, Ordering::Relaxed) as u64;
-    let slot = sched
+pub fn init(tick_hz: u64) {
+    let mut s = SCHED.lock();
+    s.tick_hz = tick_hz;
+}
+
+pub fn register_thread(pid: usize, prio: usize, cpu: usize, ctx: ArchContext) -> Option<usize> {
+    let mut s = SCHED.lock();
+    let tid = s.next_tid.fetch_add(1, Ordering::Relaxed);
+    let slot = s
         .tcbs
         .iter()
         .position(|t| matches!(t.state, ThreadState::New | ThreadState::Zombie))?;
-    let cpu = cpu_hint.unwrap_or(0);
-    sched.tcbs[slot] = Tcb {
+    s.tcbs[slot] = Tcb {
         tid,
         pid,
         state: ThreadState::Ready,
-        priority: min(priority, MAX_PRIORITY - 1),
+        priority: min(prio, MAX_PRIORITY - 1),
         time_slice: DEFAULT_TIME_SLICE_TICKS,
-        context: Context::zeroed(),
         wake_tick: 0,
-        cpu_affinity: Some(cpu),
+        cpu_affinity: cpu,
+        ctx,
         next: None,
     };
-    sched.cpus[cpu].runqueue.push(&mut sched.tcbs, slot);
+    s.cpus[cpu].rq.push(&mut s.tcbs, slot);
     Some(slot)
 }
 
-pub fn mark_sleeping(tcb_idx: usize, wake_tick: u64) {
-    let mut sched = SCHED.lock();
-    if let Some(cpu) = sched.tcbs[tcb_idx].cpu_affinity {
-        if sched.cpus[cpu].current == Some(tcb_idx) {
-            sched.tcbs[tcb_idx].state = ThreadState::Sleeping;
-            sched.tcbs[tcb_idx].wake_tick = wake_tick;
-        }
-    }
-}
+/// Called from timer ISR; `frame` holds the interrupted context.
+/// Returns pointer to next context if a switch is needed.
+pub fn on_tick(cpu_id: usize, frame: &ArchContext) -> Option<*const ArchContext> {
+    let mut s = SCHED.lock();
+    let tick = s.ticks.fetch_add(1, Ordering::Relaxed) + 1;
 
-pub fn wake_ready(now_tick: u64) {
-    let mut sched = SCHED.lock();
-    for (idx, tcb) in sched.tcbs.iter_mut().enumerate() {
-        if tcb.state == ThreadState::Sleeping && tcb.wake_tick <= now_tick {
-            tcb.state = ThreadState::Ready;
-            tcb.time_slice = DEFAULT_TIME_SLICE_TICKS;
-            let cpu = tcb.cpu_affinity.unwrap_or(0);
-            sched.cpus[cpu].runqueue.push(&mut sched.tcbs, idx);
+    if let Some(cur) = s.cpus[cpu_id].current {
+        s.tcbs[cur].ctx = *frame;
+        if s.tcbs[cur].time_slice > 0 {
+            s.tcbs[cur].time_slice -= 1;
         }
-    }
-}
-
-pub fn on_tick(cpu_id: usize) -> Option<(usize, usize)> {
-    let mut sched = SCHED.lock();
-    let tick = sched.ticks.fetch_add(1, Ordering::Relaxed) + 1;
-
-    if let Some(current_idx) = sched.cpus[cpu_id].current {
-        if sched.tcbs[current_idx].time_slice > 0 {
-            sched.tcbs[current_idx].time_slice -= 1;
-        }
-        if sched.tcbs[current_idx].time_slice == 0 && sched.tcbs[current_idx].state == ThreadState::Running {
-            sched.tcbs[current_idx].state = ThreadState::Ready;
-            sched.tcbs[current_idx].time_slice = DEFAULT_TIME_SLICE_TICKS;
-            sched.cpus[cpu_id]
-                .runqueue
-                .push(&mut sched.tcbs, current_idx);
-            sched.cpus[cpu_id].current = None;
+        if s.tcbs[cur].time_slice == 0 && s.tcbs[cur].state == ThreadState::Running {
+            s.tcbs[cur].state = ThreadState::Ready;
+            s.tcbs[cur].time_slice = DEFAULT_TIME_SLICE_TICKS;
+            s.cpus[cpu_id].rq.push(&mut s.tcbs, cur);
+            s.cpus[cpu_id].current = None;
         }
     }
 
-    // Wake sleeping threads if their deadline passed
-    for (idx, tcb) in sched.tcbs.iter_mut().enumerate() {
-        if tcb.state == ThreadState::Sleeping && tcb.wake_tick <= tick {
-            tcb.state = ThreadState::Ready;
-            tcb.time_slice = DEFAULT_TIME_SLICE_TICKS;
-            let cpu = tcb.cpu_affinity.unwrap_or(cpu_id);
-            sched.cpus[cpu].runqueue.push(&mut sched.tcbs, idx);
+    // Wake sleepers
+    for (idx, t) in s.tcbs.iter_mut().enumerate() {
+        if t.state == ThreadState::Sleeping && t.wake_tick <= tick {
+            t.state = ThreadState::Ready;
+            t.time_slice = DEFAULT_TIME_SLICE_TICKS;
+            s.cpus[t.cpu_affinity].rq.push(&mut s.tcbs, idx);
         }
     }
 
-    if sched.cpus[cpu_id].current.is_none() {
-        if let Some(next_idx) = sched.cpus[cpu_id].runqueue.pop(&mut sched.tcbs) {
-            sched.tcbs[next_idx].state = ThreadState::Running;
-            sched.cpus[cpu_id].current = Some(next_idx);
-            return Some((current_idx_or_idle(&sched.cpus[cpu_id]), next_idx));
+    if s.cpus[cpu_id].current.is_none() {
+        if let Some(next) = s.cpus[cpu_id].rq.pop(&mut s.tcbs) {
+            s.tcbs[next].state = ThreadState::Running;
+            s.cpus[cpu_id].current = Some(next);
+            let next_ctx = &s.tcbs[next].ctx as *const ArchContext;
+            return Some(next_ctx);
         }
     }
     None
 }
 
-pub fn yield_current(cpu_id: usize) -> Option<(usize, usize)> {
-    let mut sched = SCHED.lock();
-    if let Some(cur) = sched.cpus[cpu_id].current {
-        sched.tcbs[cur].state = ThreadState::Ready;
-        sched.tcbs[cur].time_slice = DEFAULT_TIME_SLICE_TICKS;
-        sched.cpus[cpu_id].runqueue.push(&mut sched.tcbs, cur);
-        sched.cpus[cpu_id].current = None;
-        if let Some(next) = sched.cpus[cpu_id].runqueue.pop(&mut sched.tcbs) {
-            sched.tcbs[next].state = ThreadState::Running;
-            sched.cpus[cpu_id].current = Some(next);
-            return Some((cur, next));
+#[no_mangle]
+pub extern "C" fn scheduler_handle_tick(cpu_id: usize, frame: *mut ArchContext) -> *const ArchContext {
+    let next = on_tick(cpu_id, unsafe { &*frame });
+    next.unwrap_or(core::ptr::null())
+}
+
+#[no_mangle]
+pub extern "C" fn scheduler_handle_yield(cpu_id: usize, frame: *mut ArchContext) -> *const ArchContext {
+    let next = yield_now(cpu_id, unsafe { &*frame });
+    next.unwrap_or(core::ptr::null())
+}
+
+#[no_mangle]
+pub extern "C" fn scheduler_handle_sleep(cpu_id: usize, frame: *mut ArchContext, wake_tick: u64) -> *const ArchContext {
+    let next = sleep_until(cpu_id, unsafe { &*frame }, wake_tick);
+    next.unwrap_or(core::ptr::null())
+}
+
+/// Explicit yield from syscall
+pub fn yield_now(cpu_id: usize, frame: &ArchContext) -> Option<*const ArchContext> {
+    let mut s = SCHED.lock();
+    if let Some(cur) = s.cpus[cpu_id].current {
+        s.tcbs[cur].ctx = *frame;
+        s.tcbs[cur].state = ThreadState::Ready;
+        s.tcbs[cur].time_slice = DEFAULT_TIME_SLICE_TICKS;
+        s.cpus[cpu_id].rq.push(&mut s.tcbs, cur);
+        s.cpus[cpu_id].current = None;
+        if let Some(next) = s.cpus[cpu_id].rq.pop(&mut s.tcbs) {
+            s.tcbs[next].state = ThreadState::Running;
+            s.cpus[cpu_id].current = Some(next);
+            return Some(&s.tcbs[next].ctx as *const ArchContext);
         }
     }
     None
 }
 
-pub fn current_tid(cpu_id: usize) -> Option<u64> {
-    let sched = SCHED.lock();
-    sched.cpus[cpu_id]
-        .current
-        .map(|idx| sched.tcbs[idx].tid)
+pub fn sleep_until(cpu_id: usize, frame: &ArchContext, wake_tick: u64) -> Option<*const ArchContext> {
+    let mut s = SCHED.lock();
+    if let Some(cur) = s.cpus[cpu_id].current {
+        s.tcbs[cur].ctx = *frame;
+        s.tcbs[cur].state = ThreadState::Sleeping;
+        s.tcbs[cur].wake_tick = wake_tick;
+        s.cpus[cpu_id].current = None;
+        if let Some(next) = s.cpus[cpu_id].rq.pop(&mut s.tcbs) {
+            s.tcbs[next].state = ThreadState::Running;
+            s.cpus[cpu_id].current = Some(next);
+            return Some(&s.tcbs[next].ctx as *const ArchContext);
+        }
+    }
+    None
 }
 
-pub fn ticks() -> u64 {
-    SCHED.lock().ticks.load(Ordering::Relaxed)
+pub fn current_tid(cpu_id: usize) -> Option<usize> {
+    let s = SCHED.lock();
+    s.cpus[cpu_id].current.map(|idx| s.tcbs[idx].tid)
 }
 
 pub fn tick_hz() -> u64 {
     SCHED.lock().tick_hz
 }
 
-fn current_idx_or_idle(cpu_sched: &CpuScheduler) -> usize {
-    cpu_sched.current.unwrap_or(0)
+pub fn ticks() -> u64 {
+    SCHED.lock().ticks.load(Ordering::Relaxed)
 }
 
-// ---------------------------------------------------------------------------
-// Tests (run on host with std)
-// ---------------------------------------------------------------------------
+#[inline]
+pub fn switch_context(old: &mut ArchContext, new: &ArchContext) {
+    unsafe { arch_context_switch(old as *mut _, new as *const _) }
+}
+
+/// Timer tick entry wrapper for interrupt handlers (x86_64).
+#[cfg(target_arch = "x86_64")]
+pub fn timer_tick_entry(cpu_id: usize, tf: &mut crate::trapframe::TrapFrameX86_64) {
+    let mut ctx: ArchContext = tf.into();
+    ctx.cr3 = read_cr3();
+    let next = scheduler_handle_tick(cpu_id, &mut ctx as *mut ArchContext);
+    if next.is_null() {
+        *tf = crate::trapframe::TrapFrameX86_64::from(&ctx);
+    } else {
+        unsafe {
+            arch_context_switch(&mut ctx as *mut ArchContext, next);
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn read_cr3() -> u64 {
+    let val: u64;
+    unsafe { core::arch::asm!("mov {}, cr3", out(reg) val, options(nomem, nostack, preserves_flags)) };
+    val
+}
+
+pub fn unpark_thread(idx: usize) {
+    let mut s = SCHED.lock();
+    if idx < MAX_THREADS && matches!(s.tcbs[idx].state, ThreadState::Blocked | ThreadState::Sleeping) {
+        s.tcbs[idx].state = ThreadState::Ready;
+        let cpu = s.tcbs[idx].cpu_affinity;
+        s.cpus[cpu].rq.push(&mut s.tcbs, idx);
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn round_robin_advances() {
+    fn rr_switch() {
         init(100);
-        let a = register_thread(1, 1, Some(0)).unwrap();
-        let b = register_thread(1, 1, Some(0)).unwrap();
+        let ctx = ArchContext::zeroed();
+        let a = register_thread(1, 1, 0, ctx).unwrap();
+        let b = register_thread(1, 1, 0, ctx).unwrap();
         {
-            let mut sched = SCHED.lock();
-            sched.cpus[0].current = Some(a);
-            sched.tcbs[a].state = ThreadState::Running;
-            sched.tcbs[a].time_slice = 1;
+            let mut s = SCHED.lock();
+            s.cpus[0].current = Some(a);
+            s.tcbs[a].state = ThreadState::Running;
+            s.tcbs[a].time_slice = 1;
         }
-        let sw = on_tick(0).unwrap();
-        assert_eq!(sw.0, a);
-        assert_eq!(sw.1, b);
-    }
-
-    #[test]
-    fn sleeping_wakes() {
-        init(100);
-        let t = register_thread(1, 1, Some(0)).unwrap();
-        mark_sleeping(t, 5);
-        let mut sched = SCHED.lock();
-        sched.tcbs[t].state = ThreadState::Sleeping;
-        drop(sched);
-        wake_ready(5);
-        let mut sched = SCHED.lock();
-        assert_eq!(sched.tcbs[t].state, ThreadState::Ready);
+        let cur_ctx = ArchContext::zeroed();
+        let next = on_tick(0, &cur_ctx).unwrap();
+        assert_eq!(next as usize != 0, true);
+        let mut s = SCHED.lock();
+        assert_eq!(s.cpus[0].current, Some(b));
     }
 }
