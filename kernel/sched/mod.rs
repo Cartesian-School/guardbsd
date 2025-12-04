@@ -452,10 +452,20 @@ fn read_cr3() -> u64 {
     val
 }
 
+#[cfg(target_arch = "aarch64")]
+#[inline(always)]
+fn read_ttbr0_el1() -> u64 {
+    let val: u64;
+    unsafe { core::arch::asm!("mrs {}, ttbr0_el1", out(reg) val, options(nomem, nostack, preserves_flags)) };
+    val
+}
+
 /// Timer tick entry wrapper for interrupt handlers (AArch64).
 #[cfg(target_arch = "aarch64")]
 pub fn timer_tick_entry_aarch64(cpu_id: usize, tf: &mut crate::trapframe::TrapFrameAArch64) {
-    let user_sp = tf.sp_el0;
+    // Preserve user SP only when returning to EL0; otherwise zero to avoid stale values.
+    let ret_el = (tf.spsr_el1 >> 2) & 0b11;
+    let user_sp = if ret_el == 0 { tf.sp_el0 } else { 0 };
     let mut ctx: ArchContext = tf.into();
     let next = scheduler_handle_tick(cpu_id, &mut ctx as *mut ArchContext);
     if next.is_null() {
@@ -544,6 +554,22 @@ pub fn spawn_kernel_thread(entry: fn()) -> ThreadId {
     register_thread(0, 1, 0, ctx).expect("spawn_kernel_thread failed")
 }
 
+#[cfg(target_arch = "aarch64")]
+pub fn spawn_kernel_thread_aarch64(entry: fn()) -> ThreadId {
+    use crate::mm::alloc_page;
+
+    let stack_base = alloc_page().expect("kernel stack alloc failed");
+    let stack_top = stack_base as u64 + 4096u64;
+
+    let mut ctx = ArchContext::zeroed();
+    ctx.elr = entry as u64;
+    ctx.sp = stack_top;
+    ctx.spsr = 0x5; // EL1h, interrupts enabled (DAIF cleared)
+    ctx.ttbr0 = read_ttbr0_el1();
+
+    register_thread(0, 1, 0, ctx).expect("spawn_kernel_thread_aarch64 failed")
+}
+
 #[cfg(target_arch = "x86_64")]
 static mut BOOT_CTX: ArchContext = ArchContext::zeroed();
 
@@ -574,6 +600,40 @@ pub fn start_first_thread() -> ! {
         }
         loop {
             unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)) };
+        }
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+static mut BOOT_CTX: ArchContext = ArchContext::zeroed();
+
+#[cfg(target_arch = "aarch64")]
+pub fn start_first_thread() -> ! {
+    let next_ptr = {
+        let mut s = SCHED.lock();
+        if s.cpus[0].current.is_none() {
+            if let Some(next) = s.cpus[0].rq.pop(&mut s.tcbs) {
+                s.tcbs[next].state = ThreadState::Running;
+                s.cpus[0].current = Some(next);
+                &s.tcbs[next].ctx as *const ArchContext
+            } else {
+                core::ptr::null()
+            }
+        } else {
+            core::ptr::null()
+        }
+    };
+
+    if next_ptr.is_null() {
+        loop {
+            unsafe { core::arch::asm!("wfe", options(nomem, nostack, preserves_flags)) };
+        }
+    } else {
+        unsafe {
+            arch_context_switch(&mut BOOT_CTX as *mut ArchContext, next_ptr);
+        }
+        loop {
+            unsafe { core::arch::asm!("wfe", options(nomem, nostack, preserves_flags)) };
         }
     }
 }

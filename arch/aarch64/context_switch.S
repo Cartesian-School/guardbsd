@@ -44,7 +44,7 @@ arch_context_switch:
     mrs x4, esr_el1
     str x4, [x2, #280]
 
-    // Restore TTBR0 with barriers
+    // Restore TTBR0 with required barriers (ordering: dsb before, isb after)
     ldr x4, [x3, #272]
     dsb ish
     msr ttbr0_el1, x4

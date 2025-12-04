@@ -17,6 +17,16 @@ extern "C" {
 // Stored tick interval used to re-arm the virtual timer on each IRQ.
 static TICK_INTERVAL: AtomicU64 = AtomicU64::new(0);
 
+#[inline(always)]
+fn gic_ack_eoi() {
+    unsafe {
+        let intid: u64;
+        core::arch::asm!("mrs {}, ICC_IAR1_EL1", out(reg) intid, options(nostack));
+        core::arch::asm!("msr ICC_EOIR1_EL1, {}", in(reg) intid, options(nostack, preserves_flags));
+        core::arch::asm!("msr ICC_DIR_EL1, {}", in(reg) intid, options(nostack, preserves_flags));
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn aarch64_timer_interrupt_handler(tf: &mut TrapFrameAArch64) {
     // Re-arm the generic timer for the next tick (one-shot programming).
@@ -29,6 +39,9 @@ pub extern "C" fn aarch64_timer_interrupt_handler(tf: &mut TrapFrameAArch64) {
 
     let cpu_id = 0;
     sched::timer_tick_entry_aarch64(cpu_id, tf);
+
+    // Minimal GICv3/v4 EOIR/Deactivate path (safe on QEMU virt).
+    gic_ack_eoi();
 }
 
 #[no_mangle]
@@ -42,7 +55,8 @@ pub extern "C" fn aarch64_syscall_entry(tf: &mut TrapFrameAArch64) {
 }
 
 fn handle_yield(tf: &mut TrapFrameAArch64) {
-    let user_sp = tf.sp_el0;
+    let ret_el = (tf.spsr_el1 >> 2) & 0b11;
+    let user_sp = if ret_el == 0 { tf.sp_el0 } else { 0 };
     let mut ctx: ArchContext = tf.into();
     let next = sched::scheduler_handle_yield(0, &mut ctx as *mut ArchContext);
     if next.is_null() {
@@ -55,7 +69,8 @@ fn handle_yield(tf: &mut TrapFrameAArch64) {
 }
 
 fn handle_sleep(tf: &mut TrapFrameAArch64) {
-    let user_sp = tf.sp_el0;
+    let ret_el = (tf.spsr_el1 >> 2) & 0b11;
+    let user_sp = if ret_el == 0 { tf.sp_el0 } else { 0 };
     let ns = tf.x[1];
     let ticks_per_sec = sched::tick_hz();
     let now = sched::ticks();
@@ -106,5 +121,8 @@ pub fn init_exceptions_and_timer() {
     // Unmask IRQs so the generic timer can fire.
     unsafe {
         core::arch::asm!("msr daifclr, #2", options(nostack, preserves_flags));
+        // Minimal GICv3 enablement: set priority mask and enable group1.
+        core::arch::asm!("msr ICC_PMR_EL1, {}", in(reg) 0xFFu64, options(nostack, preserves_flags));
+        core::arch::asm!("msr ICC_IGRPEN1_EL1, {}", in(reg) 1u64, options(nostack, preserves_flags));
     }
 }
