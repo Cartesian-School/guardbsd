@@ -28,6 +28,12 @@ pub extern "C" fn kernel_main_x86_64() -> ! {
         crate::syscall::kernel_exec_smoke_test();
     }
 
+    #[cfg(not(feature = "exec_boot_test"))]
+    {
+        // Default boot path: exec /bin/init → /bin/gsh
+        crate::syscall::sys_exec_entry();
+    }
+
     // Initialize GDT/IDT (64-bit skeleton)
     interrupts::gdt64::init_gdt64();
     interrupts::idt64::init_idt64();

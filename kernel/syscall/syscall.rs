@@ -164,6 +164,21 @@ pub fn kernel_exec_smoke_test() -> ! {
     loop {}
 }
 
+#[cfg(target_arch = "x86_64")]
+pub fn sys_exec_entry() -> ! {
+    static INIT_PATH: &[u8] = b"/bin/init\0";
+    let ret = sys_exec(INIT_PATH.as_ptr());
+    if ret < 0 {
+        unsafe {
+            let msg = b"EXEC_FAIL\n";
+            for &b in msg {
+                serial_putc(b);
+            }
+        }
+    }
+    loop {}
+}
+
 fn sys_getpid() -> isize {
     proc::current_pid() as isize
 }
