@@ -38,11 +38,11 @@ fn devd_main() -> ! {
     let mut resp_buf = [0u8; 8];
 
     loop {
-        if port_receive(port, req_buf.as_mut_ptr() as u64).is_ok() {
+        if port_receive(port, req_buf.as_mut_ptr(), req_buf.len()).is_ok() {
             let req = DevRequest::from_bytes(&req_buf);
             let resp = handle_request(&req);
             resp_buf.copy_from_slice(&resp.to_bytes());
-            let _ = port_send(port, resp_buf.as_ptr() as u64);
+            let _ = port_send(port, resp_buf.as_ptr(), resp_buf.len());
         }
 
         #[cfg(target_arch = "x86_64")]
