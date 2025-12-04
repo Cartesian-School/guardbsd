@@ -30,9 +30,20 @@ pub extern "C" fn _start() -> ! {
 }
 
 fn netd_main() -> ! {
+    // Initialize network stack with basic MTU
+    const DEFAULT_MTU: u16 = 1500;
+
+    klog_info!("netd", "netd online (mtu={}, pid={})", DEFAULT_MTU, getpid());
+
     let port = match port_create() {
-        Ok(p) => p,
-        Err(_) => exit(1),
+        Ok(p) => {
+            klog_info!("netd", "network server started (port={})", p);
+            p
+        }
+        Err(_) => {
+            klog_error!("netd", "failed to create network server port");
+            exit(1);
+        }
     };
 
     let mut req_buf = [0u8; 2048];
@@ -68,18 +79,25 @@ fn handle_request(op: u32, data: &[u8], _resp_data: &mut [u8]) -> i64 {
                 // Socket create
                 if data.len() >= 4 {
                     let sock_type_val = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-                    let sock_type = match sock_type_val {
-                        1 => SocketType::Stream,
-                        2 => SocketType::Dgram,
-                        3 => SocketType::Raw,
+                    let (sock_type, proto_str) = match sock_type_val {
+                        1 => (SocketType::Stream, "tcp"),
+                        2 => (SocketType::Dgram, "udp"),
+                        3 => (SocketType::Raw, "raw"),
                         _ => return -22, // EINVAL
                     };
-                    
+
                     match SOCKET_TABLE.create(sock_type) {
-                        Some(fd) => fd as i64,
-                        None => -24, // EMFILE
+                        Some(fd) => {
+                            klog_info!("netd", "socket {} created (proto={})", fd, proto_str);
+                            fd as i64
+                        }
+                        None => {
+                            klog_error!("netd", "socket creation failed - table full");
+                            -24 // EMFILE
+                        }
                     }
                 } else {
+                    klog_warn!("netd", "socket create - invalid data length");
                     -22 // EINVAL
                 }
             }
@@ -89,16 +107,24 @@ fn handle_request(op: u32, data: &[u8], _resp_data: &mut [u8]) -> i64 {
                     let fd = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
                     let addr = IpAddr::from_bytes(&data[4..8]);
                     let port = u16::from_be_bytes([data[8], data[9]]);
-                    
+
                     if let Some(sock) = SOCKET_TABLE.get(fd) {
                         match sock.bind(addr, port) {
-                            Ok(_) => 0,
-                            Err(e) => e,
+                            Ok(_) => {
+                                klog_info!("netd", "socket {} bound to {}:{}", fd, addr, port);
+                                0
+                            }
+                            Err(e) => {
+                                klog_error!("netd", "socket {} bind failed: {}", fd, e);
+                                e
+                            }
                         }
                     } else {
+                        klog_warn!("netd", "socket {} bind - invalid descriptor", fd);
                         -9 // EBADF
                     }
                 } else {
+                    klog_warn!("netd", "socket bind - invalid data length");
                     -22 // EINVAL
                 }
             }
@@ -106,16 +132,24 @@ fn handle_request(op: u32, data: &[u8], _resp_data: &mut [u8]) -> i64 {
                 // Listen
                 if data.len() >= 4 {
                     let fd = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
-                    
+
                     if let Some(sock) = SOCKET_TABLE.get(fd) {
                         match sock.listen() {
-                            Ok(_) => 0,
-                            Err(e) => e,
+                            Ok(_) => {
+                                klog_info!("netd", "socket {} listening", fd);
+                                0
+                            }
+                            Err(e) => {
+                                klog_error!("netd", "socket {} listen failed: {}", fd, e);
+                                e
+                            }
                         }
                     } else {
+                        klog_warn!("netd", "socket {} listen - invalid descriptor", fd);
                         -9 // EBADF
                     }
                 } else {
+                    klog_warn!("netd", "socket listen - invalid data length");
                     -22 // EINVAL
                 }
             }
@@ -125,16 +159,24 @@ fn handle_request(op: u32, data: &[u8], _resp_data: &mut [u8]) -> i64 {
                     let fd = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
                     let addr = IpAddr::from_bytes(&data[4..8]);
                     let port = u16::from_be_bytes([data[8], data[9]]);
-                    
+
                     if let Some(sock) = SOCKET_TABLE.get(fd) {
                         match sock.connect(addr, port) {
-                            Ok(_) => 0,
-                            Err(e) => e,
+                            Ok(_) => {
+                                klog_info!("netd", "socket {} connecting to {}:{}", fd, addr, port);
+                                0
+                            }
+                            Err(e) => {
+                                klog_error!("netd", "socket {} connect failed: {}", fd, e);
+                                e
+                            }
                         }
                     } else {
+                        klog_warn!("netd", "socket {} connect - invalid descriptor", fd);
                         -9 // EBADF
                     }
                 } else {
+                    klog_warn!("netd", "socket connect - invalid data length");
                     -22 // EINVAL
                 }
             }
@@ -142,17 +184,23 @@ fn handle_request(op: u32, data: &[u8], _resp_data: &mut [u8]) -> i64 {
                 // Close
                 if data.len() >= 4 {
                     let fd = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
-                    
+
                     if SOCKET_TABLE.close(fd) {
+                        klog_info!("netd", "socket {} closed", fd);
                         0
                     } else {
+                        klog_warn!("netd", "socket {} close - invalid descriptor", fd);
                         -9 // EBADF
                     }
                 } else {
+                    klog_warn!("netd", "socket close - invalid data length");
                     -22 // EINVAL
                 }
             }
-            _ => -38, // ENOSYS
+            _ => {
+                klog_warn!("netd", "unknown operation {}", op);
+                -38 // ENOSYS
+            }
         }
     }
 }

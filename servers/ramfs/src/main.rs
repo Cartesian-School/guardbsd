@@ -24,11 +24,19 @@ pub extern "C" fn _start() -> ! {
 fn ramfs_main() -> ! {
     unsafe {
         RAMFS.init();
+        klog_info!("ramfs", "RAMFS mounted (nodes={}, max_file={}, pid={})",
+                   RAMFS.node_count(), 4096, getpid());
     }
 
     let port = match port_create() {
-        Ok(p) => p,
-        Err(_) => exit(1),
+        Ok(p) => {
+            klog_info!("ramfs", "RAMFS server started (port={})", p);
+            p
+        }
+        Err(_) => {
+            klog_error!("ramfs", "failed to create RAMFS service port");
+            exit(1);
+        }
     };
 
     let mut req_buf = [0u8; 512];

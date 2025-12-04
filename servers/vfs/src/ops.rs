@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use crate::vnode::*;
+use gbsd::*;
 
 #[repr(u32)]
 pub enum VfsOp {
@@ -60,6 +61,48 @@ impl VfsResponse {
         Self {
             result: -code,
             data_len: 0,
+        }
+    }
+}
+
+// VFS operation processing with logging
+pub fn process_vfs_request(req: &VfsRequest) -> VfsResponse {
+    // Extract path string safely
+    let path_len = req.path.iter().position(|&c| c == 0).unwrap_or(req.path.len());
+    let path = core::str::from_utf8(&req.path[..path_len]).unwrap_or("<invalid>");
+
+    match req.op {
+        VfsOp::Open => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 1, path);
+            VfsResponse::err(1) // ENOSYS
+        }
+        VfsOp::Close => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 2, path);
+            VfsResponse::err(1)
+        }
+        VfsOp::Read => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 3, path);
+            VfsResponse::err(1)
+        }
+        VfsOp::Write => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 4, path);
+            VfsResponse::err(1)
+        }
+        VfsOp::Stat => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 5, path);
+            VfsResponse::err(1)
+        }
+        VfsOp::Mkdir => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 6, path);
+            VfsResponse::err(1)
+        }
+        VfsOp::Rmdir => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 7, path);
+            VfsResponse::err(1)
+        }
+        VfsOp::Unlink => {
+            klog_warn!("vfs", "unimplemented opcode={} for path={}", 8, path);
+            VfsResponse::err(1)
         }
     }
 }

@@ -20,6 +20,9 @@ pub use fs::*;
 pub use device::*;
 pub use log::*;
 
+// Re-export kernel logging macros for userland servers
+pub use kernel_log::{klog_trace, klog_debug, klog_info, klog_warn, klog_error};
+
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {

@@ -4,6 +4,8 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
+use core::fmt;
+
 #[derive(Clone, Copy)]
 pub struct IpAddr {
     pub octets: [u8; 4],
@@ -22,6 +24,12 @@ impl IpAddr {
 
     pub fn to_u32(&self) -> u32 {
         u32::from_be_bytes(self.octets)
+    }
+}
+
+impl fmt::Display for IpAddr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}.{}", self.octets[0], self.octets[1], self.octets[2], self.octets[3])
     }
 }
 

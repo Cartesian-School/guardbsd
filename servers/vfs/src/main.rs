@@ -23,8 +23,14 @@ pub extern "C" fn _start() -> ! {
 fn vfs_main() -> ! {
     // Create VFS service port
     let port = match port_create() {
-        Ok(p) => p,
-        Err(_) => exit(1),
+        Ok(p) => {
+            klog_info!("vfs", "VFS server started (port={}, pid={})", p, getpid());
+            p
+        }
+        Err(_) => {
+            klog_error!("vfs", "failed to create VFS service port");
+            exit(1);
+        }
     };
 
     // VFS server loop

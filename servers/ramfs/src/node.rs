@@ -101,4 +101,8 @@ impl RamFs {
         self.nodes[idx as usize].name_len = 0;
         true
     }
+
+    pub fn node_count(&self) -> usize {
+        self.count
+    }
 }
