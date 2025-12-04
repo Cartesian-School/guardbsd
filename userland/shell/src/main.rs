@@ -18,10 +18,9 @@ fn shell_main() -> ! {
     let pid = getpid().unwrap_or(0);
     print_pid(b"gsh: pid=", pid);
     let _ = println(b" interactive shell started");
-
+    let _ = println(b"gsh>");
     loop {
-        let _ = println(b"gsh> ");
-        cpu_relax();
+        // Stay alive; no read/yield calls yet (still ENOSYS).
     }
 }
 
@@ -72,4 +71,3 @@ fn write_num(out: &mut [u8], mut pos: usize, mut val: u64) -> usize {
     }
     pos
 }
-

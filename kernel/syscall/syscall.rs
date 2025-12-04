@@ -4,6 +4,7 @@
 #![no_std]
 use crate::proc;
 use crate::prog::init_bin::INIT_BIN;
+use crate::prog::gsh_bin::GSH_BIN;
 
 // Canonical syscall table for ETAP 3.2
 // Implemented: exit (0), write (1)
@@ -91,8 +92,8 @@ fn sys_read(_fd: usize, _buf: *mut u8, _len: usize) -> isize {
 #[cfg(target_arch = "x86_64")]
 fn sys_exec(path_ptr: *const u8) -> isize {
     // Minimal exec for ETAP 3.4 on x86_64:
-    // - Accepts only /bin/init
-    // - Loads flat INIT_BIN and enters user mode; never returns on success
+    // - Accepts /bin/init and /bin/gsh
+    // - Loads flat BIN and enters user mode; never returns on success
     const MAX_PATH_LEN: usize = 64;
     if path_ptr.is_null() {
         return EINVAL;
@@ -112,6 +113,7 @@ fn sys_exec(path_ptr: *const u8) -> isize {
     }
 
     const INIT_PATH: &[u8] = b"/bin/init";
+    const GSH_PATH: &[u8] = b"/bin/gsh";
 
     let mut nul = 0;
     while nul < buf.len() && buf[nul] != 0 {
@@ -121,6 +123,15 @@ fn sys_exec(path_ptr: *const u8) -> isize {
 
     if path == INIT_PATH {
         match proc::load_flat_program(INIT_BIN) {
+            Ok((entry, user_sp)) => {
+                proc::start_first_user_task(entry, user_sp);
+            }
+            Err(e) => {
+                return e;
+            }
+        }
+    } else if path == GSH_PATH {
+        match proc::load_flat_program(GSH_BIN) {
             Ok((entry, user_sp)) => {
                 proc::start_first_user_task(entry, user_sp);
             }

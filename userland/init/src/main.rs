@@ -15,7 +15,18 @@ fn init_main() -> ! {
     let pid = getpid().unwrap_or(0);
     println_pid("[INIT] pid=", pid);
     println("[INIT] starting GuardBSD init");
-    loop {}
+
+    let path = b"/bin/gsh\0";
+    match exec(path) {
+        Ok(()) => {
+            println("[INIT] ERROR: exec(\"/bin/gsh\") returned unexpectedly");
+            exit(1);
+        }
+        Err(err) => {
+            println_errno("[INIT] exec(\"/bin/gsh\") failed: errno=", err);
+            exit(1);
+        }
+    }
 }
 
 fn println(msg: &str) {
@@ -85,9 +96,19 @@ fn write_num(out: &mut [u8], mut pos: usize, mut val: u64) -> usize {
     pos
 }
 
-fn print_error(e: gbsd::error::Error) {
-    match e {
-        gbsd::error::Error::NoSys => println("[INIT] ENOSYS"),
-        _ => println("[INIT] exec error"),
+fn println_errno(prefix: &str, err: gbsd::error::Error) {
+    let mut buf = [0u8; 128];
+    let mut pos = 0;
+    for &b in prefix.as_bytes() {
+        if pos < buf.len() {
+            buf[pos] = b;
+            pos += 1;
+        }
     }
+    let code = err as u64;
+    let pos_after = write_num(&mut buf, pos, code);
+    if pos_after < buf.len() {
+        buf[pos_after] = b'\n';
+    }
+    let _ = write(1, &buf[..core::cmp::min(pos_after + 1, buf.len())]);
 }
