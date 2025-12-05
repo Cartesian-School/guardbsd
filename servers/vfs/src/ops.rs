@@ -40,6 +40,49 @@ impl VfsRequest {
             mode: 0,
         }
     }
+
+    pub fn from_bytes(data: &[u8]) -> Self {
+        if data.len() < 8 {
+            return Self::new();
+        }
+
+        let op = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+        let op = match op {
+            1 => VfsOp::Open,
+            2 => VfsOp::Close,
+            3 => VfsOp::Read,
+            4 => VfsOp::Write,
+            5 => VfsOp::Stat,
+            6 => VfsOp::Mkdir,
+            7 => VfsOp::Rmdir,
+            8 => VfsOp::Unlink,
+            _ => VfsOp::Open,
+        };
+
+        let mut path = [0u8; 256];
+        let path_start = 8;
+        let path_len = (data.len() - path_start).min(256);
+        path[..path_len].copy_from_slice(&data[path_start..path_start + path_len]);
+
+        let flags = if data.len() >= 264 {
+            u32::from_le_bytes([data[256], data[257], data[258], data[259]])
+        } else {
+            0
+        };
+
+        let mode = if data.len() >= 268 {
+            u32::from_le_bytes([data[260], data[261], data[262], data[263]])
+        } else {
+            0
+        };
+
+        Self {
+            op,
+            path,
+            flags,
+            mode,
+        }
+    }
 }
 
 impl VfsResponse {
@@ -63,46 +106,84 @@ impl VfsResponse {
             data_len: 0,
         }
     }
+
+    pub fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+        bytes[0..8].copy_from_slice(&self.result.to_le_bytes());
+        bytes[8..12].copy_from_slice(&self.data_len.to_le_bytes());
+        bytes
+    }
 }
 
-// VFS operation processing with logging
-pub fn process_vfs_request(req: &VfsRequest) -> VfsResponse {
+// VFS operation processing - routes to appropriate filesystem servers
+pub fn process_vfs_request(req: &VfsRequest, mounts: &mut crate::MountTable, vfs_port: usize) -> VfsResponse {
     // Extract path string safely
     let path_len = req.path.iter().position(|&c| c == 0).unwrap_or(req.path.len());
     let path = core::str::from_utf8(&req.path[..path_len]).unwrap_or("<invalid>");
 
-    match req.op {
-        VfsOp::Open => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 1, path);
-            VfsResponse::err(1) // ENOSYS
+    // Find the appropriate mount point
+    if let Some(mount) = mounts.find_mount(path) {
+        match mount.mount_type {
+            crate::MountType::RamFs => {
+                // Forward to RAMFS server via IPC
+                return forward_to_ramfs(req, mount.port, vfs_port);
+            }
+            crate::MountType::DevFs => {
+                // Forward to device filesystem
+                return VfsResponse::err(1); // Not implemented yet
+            }
         }
-        VfsOp::Close => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 2, path);
-            VfsResponse::err(1)
+    } else {
+        klog_warn!("vfs", "no mount point found for path={}", path);
+        return VfsResponse::err(2); // ENOENT
+    }
+}
+
+fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> VfsResponse {
+    use gbsd::*;
+
+    if ramfs_port == 0 {
+        klog_warn!("vfs", "RAMFS port not configured");
+        return VfsResponse::err(19); // ENODEV
+    }
+
+    // Prepare IPC message to RAMFS
+    // For now, we'll send the raw request data
+    let mut ipc_buf = [0u8; 512];
+
+    // Copy operation code
+    ipc_buf[0..4].copy_from_slice(&(req.op as u32).to_le_bytes());
+
+    // Copy path
+    let path_len = req.path.iter().position(|&c| c == 0).unwrap_or(req.path.len());
+    ipc_buf[8..8+path_len].copy_from_slice(&req.path[..path_len]);
+
+    // Copy flags and mode if needed
+    ipc_buf[256..260].copy_from_slice(&req.flags.to_le_bytes());
+    ipc_buf[260..264].copy_from_slice(&req.mode.to_le_bytes());
+
+    // Send to RAMFS server
+    if port_send(ramfs_port, ipc_buf.as_ptr(), 512).is_ok() {
+        // Wait for response
+        let mut resp_buf = [0u8; 512];
+        if port_receive(vfs_port, resp_buf.as_mut_ptr(), 512).is_ok() {
+            // Parse response
+            let result = i64::from_le_bytes([
+                resp_buf[0], resp_buf[1], resp_buf[2], resp_buf[3],
+                resp_buf[4], resp_buf[5], resp_buf[6], resp_buf[7]
+            ]);
+
+            if result >= 0 {
+                VfsResponse::ok(result as u64)
+            } else {
+                VfsResponse::err((-result) as u32)
+            }
+        } else {
+            klog_error!("vfs", "failed to receive response from RAMFS");
+            VfsResponse::err(5) // EIO
         }
-        VfsOp::Read => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 3, path);
-            VfsResponse::err(1)
-        }
-        VfsOp::Write => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 4, path);
-            VfsResponse::err(1)
-        }
-        VfsOp::Stat => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 5, path);
-            VfsResponse::err(1)
-        }
-        VfsOp::Mkdir => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 6, path);
-            VfsResponse::err(1)
-        }
-        VfsOp::Rmdir => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 7, path);
-            VfsResponse::err(1)
-        }
-        VfsOp::Unlink => {
-            klog_warn!("vfs", "unimplemented opcode={} for path={}", 8, path);
-            VfsResponse::err(1)
-        }
+    } else {
+        klog_error!("vfs", "failed to send request to RAMFS");
+        VfsResponse::err(5) // EIO
     }
 }

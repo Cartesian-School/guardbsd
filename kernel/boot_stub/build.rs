@@ -3,22 +3,29 @@ fn main() {
         .file("src/multiboot.S")
         .compile("multiboot");
     println!("cargo:rerun-if-changed=src/multiboot.S");
-    
-    cc::Build::new()
-        .file("../interrupt/syscall_entry.S")
-        .compile("syscall_entry");
-    println!("cargo:rerun-if-changed=../interrupt/syscall_entry.S");
-    
+
+    // Long mode transition not yet implemented
+    // cc::Build::new()
+    //     .file("src/long_mode.S")
+    //     .compile("long_mode");
+    // println!("cargo:rerun-if-changed=src/long_mode.S");
+
+    // Syscall entry is 64-bit only, not needed for 32-bit boot stub
+    // cc::Build::new()
+    //     .file("../interrupt/syscall_entry.S")
+    //     .compile("syscall_entry");
+    // println!("cargo:rerun-if-changed=../interrupt/syscall_entry.S");
+
     cc::Build::new()
         .file("../interrupt/keyboard_irq.S")
         .compile("keyboard_irq");
     println!("cargo:rerun-if-changed=../interrupt/keyboard_irq.S");
-    
+
     cc::Build::new()
         .file("../interrupt/timer_irq.S")
         .compile("timer_irq");
     println!("cargo:rerun-if-changed=../interrupt/timer_irq.S");
-    
+
     cc::Build::new()
         .file("../process/context.S")
         .compile("context");

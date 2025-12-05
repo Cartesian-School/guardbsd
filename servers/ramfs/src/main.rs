@@ -29,16 +29,9 @@ fn ramfs_main() -> ! {
                    RAMFS.node_count(), 4096, pid);
     }
 
-    let port = match port_create() {
-        Ok(p) => {
-            klog_info!("ramfs", "RAMFS server started (port={})", p);
-            p
-        }
-        Err(_) => {
-            klog_error!("ramfs", "failed to create RAMFS service port");
-            exit(1);
-        }
-    };
+    // Use known port for RAMFS
+    let port = 1001;
+    klog_info!("ramfs", "RAMFS server started (port={})", port);
 
     let mut req_buf = [0u8; 512];
     let mut resp_buf = [0u8; 512];

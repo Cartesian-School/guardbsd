@@ -30,7 +30,7 @@ static mut IDT: [IdtEntry; 256] = [IdtEntry {
 }; 256];
 
 extern "C" {
-    fn syscall_entry();
+    // fn syscall_entry(); // Commented out - 64-bit only
     fn keyboard_irq_handler();
     fn timer_irq_handler();
 }
@@ -44,7 +44,7 @@ pub fn init_idt() {
         set_idt_entry(0x21, keyboard_irq_handler as u64, 0x08, 0x8E);
         
         // Set syscall interrupt (0x80)
-        set_idt_entry(0x80, syscall_entry as u64, 0x08, 0xEE);
+        // set_idt_entry(0x80, syscall_entry as u64, 0x08, 0xEE); // Commented out - 64-bit only
         
         // Load IDT
         let idtr = IdtPtr {

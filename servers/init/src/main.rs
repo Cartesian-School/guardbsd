@@ -11,10 +11,13 @@ use core::panic::PanicInfo;
 
 // GuardBSD syscall interface
 mod syscalls {
-    // GuardBSD syscall numbers (custom, not Linux)
-    pub const GBSD_SYS_PORT_CREATE: u64 = 20;
-    pub const GBSD_SYS_EXIT: u64 = 1;
-    pub const GBSD_SYS_EXEC: u64 = 4;
+    // Import canonical syscall numbers from shared module
+    include!("../../../shared/syscall_numbers.rs");
+    
+    // Compatibility aliases for this module
+    pub const GBSD_SYS_PORT_CREATE: u64 = SYS_IPC_PORT_CREATE as u64;
+    pub const GBSD_SYS_EXIT: u64 = SYS_EXIT as u64;
+    pub const GBSD_SYS_EXEC: u64 = SYS_EXEC as u64;
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]

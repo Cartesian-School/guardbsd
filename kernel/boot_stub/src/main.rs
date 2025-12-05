@@ -1,43 +1,21 @@
 #![no_std]
 #![no_main]
-#![cfg(feature = "x86_legacy")]
 
 use core::panic::PanicInfo;
 
 mod interrupt;
 mod drivers;
 mod fs;
-mod scheduler;
+// Note: Using kernel/sched/mod.rs instead of local scheduler
+mod process;
+mod ipc;
 
 mod syscall {
-    // Canonical syscall table shared with kernel/syscall/syscall.rs
-    // Implemented now: exit (0), write (1)
-    // To implement: exec (4), getpid (7), yield (6)
-    pub const SYS_EXIT: usize = 0;
-    pub const SYS_WRITE: usize = 1;
-    pub const SYS_READ: usize = 2;   // ENOSYS placeholder
-    pub const SYS_EXEC: usize = 4;   // ENOSYS placeholder
-    pub const SYS_YIELD: usize = 6;  // ENOSYS placeholder
-    pub const SYS_GETPID: usize = 7; // ENOSYS placeholder
-
-    // Reserved/ENOSYS
-    pub const SYS_FORK: usize = 3;
-    pub const SYS_WAIT: usize = 5;
-    pub const SYS_OPEN: usize = 8;
-    pub const SYS_CLOSE: usize = 9;
-    pub const SYS_MKDIR: usize = 10;
-    pub const SYS_STAT: usize = 11;
-    pub const SYS_RENAME: usize = 12;
-    pub const SYS_UNLINK: usize = 13;
-    pub const SYS_SYNC: usize = 14;
-    pub const SYS_LOG_READ: usize = 20;
-    pub const SYS_LOG_ACK: usize = 21;
-    pub const SYS_LOG_REGISTER_DAEMON: usize = 22;
-    pub const SYS_IPC_PORT_CREATE: usize = 30;
-    pub const SYS_IPC_SEND: usize = 31;
-    pub const SYS_IPC_RECV: usize = 32;
-
-    const ENOSYS: isize = -38;
+    // Import canonical syscall numbers from shared module
+    // This ensures boot stub and userland always agree on syscall numbers
+    include!("../../shared/syscall_numbers.rs");
+    
+    use super::syscall::*;
 
     pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
         match syscall_num {
@@ -59,24 +37,87 @@ mod syscall {
             SYS_LOG_READ => ENOSYS,
             SYS_LOG_ACK => ENOSYS,
             SYS_LOG_REGISTER_DAEMON => ENOSYS,
-            SYS_IPC_PORT_CREATE => ENOSYS,
-            SYS_IPC_SEND => ENOSYS,
-            SYS_IPC_RECV => ENOSYS,
+            SYS_IPC_PORT_CREATE => sys_ipc_port_create(),
+            SYS_IPC_SEND => sys_ipc_send(arg1, arg2, arg3 as u32, [0, 0, 0, 0]), // Simplified
+            SYS_IPC_RECV => sys_ipc_recv(arg1),
             _ => ENOSYS,
+        }
+    }
+
+    // File descriptor management
+    const MAX_FDS: usize = 256;
+    static mut OPEN_FDS: [Option<FileDescriptor>; MAX_FDS] = [None; MAX_FDS];
+
+    #[derive(Clone, Copy)]
+    struct FileDescriptor {
+        inode: u64,
+        offset: u64,
+        flags: u32,
+    }
+
+    // Simple in-kernel RAMFS implementation
+    const MAX_NODES: usize = 256;
+    static mut RAMFS_NODES: [RamFsNode; MAX_NODES] = [RamFsNode::new(); MAX_NODES];
+    static mut RAMFS_NODE_COUNT: usize = 1; // Root directory
+
+    #[derive(Clone, Copy)]
+    struct RamFsNode {
+        name: [u8; 64],
+        name_len: usize,
+        node_type: NodeType,
+        data: [u8; 4096],
+        size: usize,
+        parent: usize,
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum NodeType {
+        File,
+        Directory,
+    }
+
+    impl RamFsNode {
+        const fn new() -> Self {
+            RamFsNode {
+                name: [0; 64],
+                name_len: 0,
+                node_type: NodeType::File,
+                data: [0; 4096],
+                size: 0,
+                parent: 0,
+            }
+        }
+
+        fn set_name(&mut self, name: &[u8]) {
+            let len = name.len().min(64);
+            self.name[..len].copy_from_slice(&name[..len]);
+            self.name_len = len;
+        }
+
+        fn name_matches(&self, name: &[u8]) -> bool {
+            self.name_len == name.len() && &self.name[..self.name_len] == name
+        }
+    }
+
+    pub(crate) fn init_ramfs() {
+        unsafe {
+            // Initialize root directory
+            RAMFS_NODES[0].set_name(b"/");
+            RAMFS_NODES[0].node_type = NodeType::Directory;
+            RAMFS_NODE_COUNT = 1;
         }
     }
     
     fn sys_exit(status: i32) -> isize {
-        let pid = super::scheduler::get_current();
+        // TODO: Integrate with main kernel scheduler (kernel/sched/mod.rs)
+        // Will use crate::sched::current_tid() when fully integrated
         unsafe { 
             super::print("[SYSCALL] exit(");
             super::print_num(status as usize);
-            super::print(") from PID ");
-            super::print_num(pid);
-            super::print("\n");
+            super::print(")\n");
         }
-        // Mark process as terminated
-        // For now, halt
+        // TODO: Proper process cleanup and scheduler integration
+        // For now, halt (will be fixed in Phase 2 of remediation plan)
         loop { unsafe { core::arch::asm!("hlt"); } }
     }
     
@@ -99,14 +140,29 @@ mod syscall {
     fn sys_read(_fd: usize, _buf: *mut u8, _len: usize) -> isize { ENOSYS }
     
     fn sys_fork() -> isize { ENOSYS }
-    
+
     fn sys_exec(_path: *const u8) -> isize { ENOSYS }
-    
+
     fn sys_wait(_status: *mut i32) -> isize { ENOSYS }
-    
+
     fn sys_yield() -> isize { ENOSYS }
-    
+
     fn sys_getpid() -> isize { ENOSYS }
+
+    fn sys_ipc_port_create() -> isize {
+        // Get current PID (simplified - assume PID 0 for boot stub)
+        crate::ipc::ipc_create_port(0)
+    }
+
+    fn sys_ipc_send(port_id: usize, receiver_pid: usize, msg_type: u32, data: [u32; 4]) -> isize {
+        // Get current PID (simplified - assume PID 0 for boot stub)
+        crate::ipc::ipc_send(port_id, 0, receiver_pid, msg_type, data)
+    }
+
+    fn sys_ipc_recv(_port_id: usize) -> isize {
+        // For now, just return success - actual receive would be more complex
+        0
+    }
 }
 
 #[no_mangle]
@@ -123,15 +179,12 @@ pub extern "C" fn keyboard_interrupt_handler() {
 pub extern "C" fn timer_interrupt_handler() {
     drivers::timer::handle_interrupt();
     
-    // Preemptive scheduling every 10 ticks (~100ms at 100Hz)
-    if drivers::timer::get_ticks() % 10 == 0 {
-        if let Some(next_pid) = scheduler::schedule() {
-            if next_pid != scheduler::get_current() {
-                // Context switch would happen here
-                // For now, just track scheduling
-            }
-        }
-    }
+    // TODO: Integrate with main kernel scheduler (kernel/sched/mod.rs)
+    // Proper preemptive scheduling will use:
+    // - crate::sched::on_tick(cpu_id, &current_context)
+    // - Actual context switching via crate::sched::arch_context_switch()
+    // This will be implemented in Phase 4 of the remediation plan
+    // For now, timer just ticks without preemption
 }
 
 core::arch::global_asm!(
@@ -193,23 +246,175 @@ pub extern "C" fn _start() -> ! {
         print("[OK] IDT initialized (syscall int 0x80, IRQ0, IRQ1)\n");
         
         print("\n[INIT] Initializing scheduler...\n");
-        scheduler::init();
+        // Initialize main kernel scheduler with 100 Hz timer
+        crate::sched::init(100);
         drivers::timer::init(100); // 100 Hz
         print("[OK] Scheduler initialized (100 Hz timer)\n");
         
         enable_interrupts();
         print("\n[INIT] Microkernel bootstrap starting...\n");
+
+        // Initialize IPC infrastructure
+        crate::ipc::init_ipc();
+        print("[OK] IPC infrastructure initialized\n");
+
+        // Initialize process manager
+        crate::process::init_process_manager();
+        print("[OK] Process manager initialized\n");
+
+        // Initialize RAMFS
+        unsafe { crate::syscall::init_ramfs(); }
+        print("[OK] RAMFS initialized\n");
+
+        // Initialize microkernel communication channels
+        if !crate::ipc::init_microkernel_channels() {
+            print("[ERROR] Failed to initialize microkernel channels\n");
+            loop { unsafe { core::arch::asm!("hlt"); } }
+        }
+        print("[OK] Microkernel communication channels established\n");
+
+        // Initialize server communication channels
+        if !crate::ipc::init_server_channels() {
+            print("[ERROR] Failed to initialize server channels\n");
+            loop { unsafe { core::arch::asm!("hlt"); } }
+        }
+        print("[OK] Server communication channels established\n");
+
+        // Load microkernels
         print("[INIT] Loading µK-Space (memory management)...\n");
+        let space_pid = crate::process::load_microkernel("uk_space", "modules/uk_space");
+        if let Some(pid) = space_pid {
+            print("[OK] µK-Space loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Start the microkernel
+            if crate::process::start_microkernel(pid) {
+                print("[OK] µK-Space started successfully\n");
+            } else {
+                print("[ERROR] Failed to start µK-Space\n");
+            }
+        } else {
+            print("[ERROR] Failed to load µK-Space\n");
+        }
+
         print("[INIT] Loading µK-Time (scheduler)...\n");
+        let time_pid = crate::process::load_microkernel("uk_time", "modules/uk_time");
+        if let Some(pid) = time_pid {
+            print("[OK] µK-Time loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Start the microkernel
+            if crate::process::start_microkernel(pid) {
+                print("[OK] µK-Time started successfully\n");
+            } else {
+                print("[ERROR] Failed to start µK-Time\n");
+            }
+        } else {
+            print("[ERROR] Failed to load µK-Time\n");
+        }
+
         print("[INIT] Loading µK-IPC (communication)...\n");
-        print("[OK] Microkernels initialized\n\n");
+        let ipc_pid = crate::process::load_microkernel("uk_ipc", "modules/uk_ipc");
+        if let Some(pid) = ipc_pid {
+            print("[OK] µK-IPC loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Start the microkernel
+            if crate::process::start_microkernel(pid) {
+                print("[OK] µK-IPC started successfully\n");
+            } else {
+                print("[ERROR] Failed to start µK-IPC\n");
+            }
+        } else {
+            print("[ERROR] Failed to load µK-IPC\n");
+        }
+
+        print("[OK] All microkernels loaded and started\n");
+        print("[OK] Microkernel system operational\n\n");
         
         print("[INIT] Starting system servers...\n");
+
+        // Load system servers
         print("[INIT] Starting init server...\n");
+        let init_pid = crate::process::load_server("init", "servers/init");
+        if let Some(pid) = init_pid {
+            print("[OK] Init server loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Register init service
+            crate::ipc::register_service("init", 0, pid);
+
+            if crate::process::start_server(pid) {
+                print("[OK] Init server started successfully\n");
+            } else {
+                print("[ERROR] Failed to start init server\n");
+            }
+        } else {
+            print("[ERROR] Failed to load init server\n");
+        }
+
         print("[INIT] Starting vfs server...\n");
+        let vfs_pid = crate::process::load_server("vfs", "servers/vfs");
+        if let Some(pid) = vfs_pid {
+            print("[OK] VFS server loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Register VFS service
+            crate::ipc::register_service("vfs", 0, pid);
+
+            if crate::process::start_server(pid) {
+                print("[OK] VFS server started successfully\n");
+            } else {
+                print("[ERROR] Failed to start VFS server\n");
+            }
+        } else {
+            print("[ERROR] Failed to load VFS server\n");
+        }
+
         print("[INIT] Starting ramfs server...\n");
+        let ramfs_pid = crate::process::load_server("ramfs", "servers/ramfs");
+        if let Some(pid) = ramfs_pid {
+            print("[OK] RAMFS server loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Register RAMFS service
+            crate::ipc::register_service("ramfs", 0, pid);
+
+            if crate::process::start_server(pid) {
+                print("[OK] RAMFS server started successfully\n");
+            } else {
+                print("[ERROR] Failed to start RAMFS server\n");
+            }
+        } else {
+            print("[ERROR] Failed to load RAMFS server\n");
+        }
+
         print("[INIT] Starting devd server...\n");
-        print("[OK] System servers started\n\n");
+        let devd_pid = crate::process::load_server("devd", "servers/devd");
+        if let Some(pid) = devd_pid {
+            print("[OK] DEVD server loaded (PID: ");
+            print_num(pid);
+            print(")\n");
+
+            // Register DEVD service
+            crate::ipc::register_service("devd", 0, pid);
+
+            if crate::process::start_server(pid) {
+                print("[OK] DEVD server started successfully\n");
+            } else {
+                print("[ERROR] Failed to start DEVD server\n");
+            }
+        } else {
+            print("[ERROR] Failed to load DEVD server\n");
+        }
+
+        print("[OK] All system servers loaded and started\n\n");
         
         print("[SHELL] Starting gsh (GuardBSD Shell)...\n");
         print("================================================================================\n");

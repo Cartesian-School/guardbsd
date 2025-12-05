@@ -20,7 +20,7 @@ GuardBSD is a modern operating system featuring:
 
 - **Microkernel Architecture** - Minimal kernel, services in userspace
 - **Capability-Based Security** - Fine-grained access control
-- **Native Filesystem (GuardFS)** - Modern filesystem with snapshots and compression
+- **Filesystem Support** - RAMFS operational, GuardFS planned with snapshots and compression
 - **Advanced Shell (gsh)** - Feature-rich shell inspired by zsh
 - **GuaBoot Bootloader** - Unified BIOS/UEFI bootloader
 - **100% BSD Licensed** - No GPL components
@@ -54,22 +54,26 @@ qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -m 256M
 - **µK-IPC** - Inter-process communication
 
 ### Filesystem
-- **GuardFS** - Native filesystem
-- **Journaling** - Crash recovery
+- **RAMFS** - Operational in-memory filesystem
+- **VFS** - Virtual filesystem layer with IPC routing
+- **GuardFS** - Native filesystem (planned)
+- **Journaling** - Crash recovery (planned)
 - **Snapshots** - Point-in-time state (planned)
 - **Compression** - Transparent compression (planned)
-- **VFS** - Virtual filesystem layer
 
 ### Shell (gsh)
-- **Command History** - Persistent history
-- **Tab Completion** - Intelligent completion
-- **Job Control** - Background jobs (fg/bg)
-- **Pipes & Redirection** - Standard I/O
-- **Scripting** - Shell script support
-- **Aliases & Functions** - Customization
+- **Interactive Interface** - Full command-line interface
+- **Command History** - Arrow key navigation (100 commands)
+- **Line Editing** - Backspace, cursor movement (Ctrl+A/Ctrl+E)
+- **Environment Variables** - Variable expansion and management
+- **Filesystem Integration** - Working cd/pwd with real directory navigation
+- **Tab Completion** - Intelligent completion (planned)
+- **Job Control** - Background jobs (planned)
+- **Pipes & Redirection** - Standard I/O (planned)
 
 ### Services
-- **VFS** - Virtual filesystem server
+- **VFS** - Virtual filesystem server (operational)
+- **RAMFS** - RAM filesystem server (operational)
 - **DevD** - Device manager
 - **NetD** - Network stack (planned)
 - **Init** - System initialization

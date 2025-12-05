@@ -416,6 +416,31 @@ pub fn current_tid(cpu_id: usize) -> Option<usize> {
     s.cpus[cpu_id].current.map(|idx| s.tcbs[idx].tid)
 }
 
+/// Get current thread's context (for fork)
+/// Returns a copy of the current thread's ArchContext
+pub fn get_current_context(cpu_id: usize) -> Option<ArchContext> {
+    let s = SCHED.lock();
+    if let Some(idx) = s.cpus[cpu_id].current {
+        if idx < MAX_THREADS {
+            return Some(s.tcbs[idx].ctx);
+        }
+    }
+    None
+}
+
+/// Update thread's context (used after fork to set child's return value)
+/// Returns true if successful, false if thread not found
+pub fn set_thread_context(tid: usize, ctx: ArchContext) -> bool {
+    let mut s = SCHED.lock();
+    for tcb in s.tcbs.iter_mut() {
+        if tcb.tid == tid && tcb.state != ThreadState::New {
+            tcb.ctx = ctx;
+            return true;
+        }
+    }
+    false
+}
+
 pub fn tick_hz() -> u64 {
     SCHED.lock().tick_hz
 }
@@ -491,6 +516,42 @@ pub fn unpark_thread(idx: usize) {
         let cpu = s.tcbs[idx].cpu_affinity;
         s.cpus[cpu].rq.push(&mut s.tcbs, idx);
     }
+}
+
+/// Set thread state directly
+/// Used by process management syscalls to update thread state
+/// Returns true if successful, false if thread index invalid or already terminated
+pub fn set_thread_state(tid: usize, new_state: ThreadState) -> bool {
+    let mut s = SCHED.lock();
+    if tid >= MAX_THREADS {
+        return false;
+    }
+    
+    // Don't allow resurrection of terminated threads
+    if matches!(s.tcbs[tid].state, ThreadState::New) {
+        return false;
+    }
+    
+    let old_state = s.tcbs[tid].state;
+    s.tcbs[tid].state = new_state;
+    
+    // If transitioning to Zombie, remove from run queue if currently scheduled
+    if new_state == ThreadState::Zombie {
+        // If this thread is currently running on a CPU, clear it
+        for cpu in s.cpus.iter_mut() {
+            if cpu.current == Some(tid) {
+                cpu.current = None;
+            }
+        }
+    }
+    
+    // If transitioning to Ready from non-Ready, add to run queue
+    if new_state == ThreadState::Ready && old_state != ThreadState::Ready {
+        let cpu = s.tcbs[tid].cpu_affinity;
+        s.cpus[cpu].rq.push(&mut s.tcbs, tid);
+    }
+    
+    true
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,11 @@ pub enum Builtin {
     Echo,
     Cd,
     Pwd,
+    Export,
+    Set,
+    Unset,
+    Env,
+    History,
 }
 
 impl Builtin {
@@ -22,9 +27,12 @@ impl Builtin {
             b"echo" => Some(Builtin::Echo),
             b"cd" => Some(Builtin::Cd),
             b"pwd" => Some(Builtin::Pwd),
+            b"export" => Some(Builtin::Export),
+            b"set" => Some(Builtin::Set),
+            b"unset" => Some(Builtin::Unset),
+            b"env" => Some(Builtin::Env),
+            b"history" => Some(Builtin::History),
             _ => None,
         }
     }
-
-
 }

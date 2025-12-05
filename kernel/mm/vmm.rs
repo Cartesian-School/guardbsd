@@ -42,6 +42,132 @@ impl AddressSpace {
         }
         Some(AddressSpace { pml4_phys })
     }
+    
+    /// Get the physical address of the PML4
+    pub fn pml4_phys(&self) -> usize {
+        self.pml4_phys
+    }
+    
+    /// Clone an address space (for fork())
+    /// Creates a new page table hierarchy and copies all mappings
+    /// 
+    /// Note: This performs a full copy of all pages.
+    /// Future enhancement: Implement Copy-on-Write (COW) for better performance
+    /// 
+    /// Returns: Physical address of new PML4, or None if allocation fails
+    pub fn clone(source_pml4: usize) -> Option<usize> {
+        // Allocate new PML4
+        let new_pml4_phys = pmm::alloc_page()?;
+        
+        unsafe {
+            let src_pml4 = source_pml4 as *const PageTable;
+            let dst_pml4 = new_pml4_phys as *mut PageTable;
+            
+            // Initialize destination
+            (*dst_pml4).entries.fill(0);
+            
+            // Copy each PML4 entry
+            for pml4_idx in 0..ENTRIES {
+                let src_entry = (*src_pml4).entries[pml4_idx];
+                
+                // Skip non-present entries and kernel space (top half)
+                if (src_entry & 1) == 0 || pml4_idx >= 256 {
+                    continue;
+                }
+                
+                // Clone PDPT
+                let src_pdpt_phys = (src_entry & !0xFFF) as usize;
+                if let Some(new_pdpt_phys) = Self::clone_pdpt(src_pdpt_phys) {
+                    (*dst_pml4).entries[pml4_idx] = new_pdpt_phys as u64 | (src_entry & 0xFFF);
+                } else {
+                    // Allocation failed, cleanup and return None
+                    // TODO: Add proper cleanup of partially allocated structures
+                    return None;
+                }
+            }
+        }
+        
+        Some(new_pml4_phys)
+    }
+    
+    /// Clone a PDPT (Page Directory Pointer Table)
+    unsafe fn clone_pdpt(source_pdpt: usize) -> Option<usize> {
+        let new_pdpt_phys = pmm::alloc_page()?;
+        let src_pdpt = source_pdpt as *const PageTable;
+        let dst_pdpt = new_pdpt_phys as *mut PageTable;
+        
+        (*dst_pdpt).entries.fill(0);
+        
+        for pdpt_idx in 0..ENTRIES {
+            let src_entry = (*src_pdpt).entries[pdpt_idx];
+            if (src_entry & 1) == 0 {
+                continue;
+            }
+            
+            let src_pd_phys = (src_entry & !0xFFF) as usize;
+            if let Some(new_pd_phys) = Self::clone_pd(src_pd_phys) {
+                (*dst_pdpt).entries[pdpt_idx] = new_pd_phys as u64 | (src_entry & 0xFFF);
+            } else {
+                return None;
+            }
+        }
+        
+        Some(new_pdpt_phys)
+    }
+    
+    /// Clone a PD (Page Directory)
+    unsafe fn clone_pd(source_pd: usize) -> Option<usize> {
+        let new_pd_phys = pmm::alloc_page()?;
+        let src_pd = source_pd as *const PageTable;
+        let dst_pd = new_pd_phys as *mut PageTable;
+        
+        (*dst_pd).entries.fill(0);
+        
+        for pd_idx in 0..ENTRIES {
+            let src_entry = (*src_pd).entries[pd_idx];
+            if (src_entry & 1) == 0 {
+                continue;
+            }
+            
+            let src_pt_phys = (src_entry & !0xFFF) as usize;
+            if let Some(new_pt_phys) = Self::clone_pt(src_pt_phys) {
+                (*dst_pd).entries[pd_idx] = new_pt_phys as u64 | (src_entry & 0xFFF);
+            } else {
+                return None;
+            }
+        }
+        
+        Some(new_pd_phys)
+    }
+    
+    /// Clone a PT (Page Table) and copy all page contents
+    unsafe fn clone_pt(source_pt: usize) -> Option<usize> {
+        let new_pt_phys = pmm::alloc_page()?;
+        let src_pt = source_pt as *const PageTable;
+        let dst_pt = new_pt_phys as *mut PageTable;
+        
+        (*dst_pt).entries.fill(0);
+        
+        for pt_idx in 0..ENTRIES {
+            let src_entry = (*src_pt).entries[pt_idx];
+            if (src_entry & 1) == 0 {
+                continue;
+            }
+            
+            // Allocate new physical page for content
+            let new_page_phys = pmm::alloc_page()?;
+            
+            // Copy page content
+            let src_page = ((src_entry & !0xFFF) as usize) as *const u8;
+            let dst_page = new_page_phys as *mut u8;
+            core::ptr::copy_nonoverlapping(src_page, dst_page, PAGE_SIZE);
+            
+            // Set entry with same flags
+            (*dst_pt).entries[pt_idx] = new_page_phys as u64 | (src_entry & 0xFFF);
+        }
+        
+        Some(new_pt_phys)
+    }
 
     pub fn map(&mut self, virt: usize, phys: usize, flags: PageFlags) -> bool {
         let pml4_idx = (virt >> 39) & 0x1FF;
