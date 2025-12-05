@@ -5,12 +5,14 @@ edition = "2021"
 authors = ["Cartesian School - Siergej Sobolewski"]
 license = "BSD-3-Clause"
 
-[dependencies]
-gbsd = { path = "../../userland/libgbsd" }
-kernel_log = { path = "../../kernel/log" }
+[lib]
+path = "src/lib.rs"
 
-[profile.release]
-opt-level = 2
-lto = true
-panic = "abort"
+[[bin]]
+name = "guardfs"
+path = "src/main.rs"
+
+[dependencies]
+libgbsd = { path = "../../userland/libgbsd" }
+kernel_log = { path = "../../kernel/log" }
 

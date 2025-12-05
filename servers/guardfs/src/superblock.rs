@@ -4,7 +4,6 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use gbsd::*;
 
 pub const GUARDFS_MAGIC: &[u8; 8] = b"GUARDFS\0";
 pub const GUARDFS_VERSION: u32 = 1;
@@ -189,7 +188,7 @@ impl GuardFsSuperblock {
 }
 
 // Simple CRC32 implementation
-fn crc32(data: &[u8]) -> u32 {
+pub fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFFFFFF;
     
     for &byte in data {
