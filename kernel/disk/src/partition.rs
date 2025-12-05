@@ -13,14 +13,29 @@ pub const MBR_SIGNATURE: u16 = 0xAA55;
 pub const MBR_PARTITION_TABLE_OFFSET: usize = 0x1BE;
 pub const MBR_SIGNATURE_OFFSET: usize = 0x1FE;
 
-// Partition types
+// Partition types (MBR)
 pub const PART_TYPE_EMPTY: u8 = 0x00;
+pub const PART_TYPE_FAT12: u8 = 0x01;
+pub const PART_TYPE_FAT16_SMALL: u8 = 0x04;
+pub const PART_TYPE_EXTENDED: u8 = 0x05;
+pub const PART_TYPE_FAT16: u8 = 0x06;
+pub const PART_TYPE_NTFS: u8 = 0x07;
+pub const PART_TYPE_EXFAT: u8 = 0x07; // Same as NTFS
 pub const PART_TYPE_FAT32: u8 = 0x0B;
 pub const PART_TYPE_FAT32_LBA: u8 = 0x0C;
-pub const PART_TYPE_NTFS: u8 = 0x07;
+pub const PART_TYPE_FAT16_LBA: u8 = 0x0E;
+pub const PART_TYPE_EXTENDED_LBA: u8 = 0x0F;
+pub const PART_TYPE_LINUX_SWAP: u8 = 0x82;  // *** SWAP PARTITION ***
 pub const PART_TYPE_LINUX: u8 = 0x83;
+pub const PART_TYPE_LINUX_EXTENDED: u8 = 0x85;
 pub const PART_TYPE_LVM: u8 = 0x8E;
+pub const PART_TYPE_FREEBSD: u8 = 0xA5;
+pub const PART_TYPE_OPENBSD: u8 = 0xA6;
+pub const PART_TYPE_NETBSD: u8 = 0xA9;
+pub const PART_TYPE_APPLE_HFS: u8 = 0xAF;
+pub const PART_TYPE_SOLARIS: u8 = 0xBF;
 pub const PART_TYPE_GPT: u8 = 0xEE;
+pub const PART_TYPE_EFI_SYSTEM: u8 = 0xEF;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -51,6 +66,47 @@ impl MbrPartition {
     
     pub fn is_bootable(&self) -> bool {
         self.bootable == 0x80
+    }
+    
+    pub fn is_swap(&self) -> bool {
+        self.partition_type == PART_TYPE_LINUX_SWAP
+    }
+    
+    pub fn is_extended(&self) -> bool {
+        self.partition_type == PART_TYPE_EXTENDED 
+            || self.partition_type == PART_TYPE_EXTENDED_LBA
+            || self.partition_type == PART_TYPE_LINUX_EXTENDED
+    }
+    
+    pub fn get_type_name(&self) -> &'static str {
+        match self.partition_type {
+            PART_TYPE_EMPTY => "Empty",
+            PART_TYPE_FAT12 => "FAT12",
+            PART_TYPE_FAT16_SMALL => "FAT16 (small)",
+            PART_TYPE_EXTENDED => "Extended",
+            PART_TYPE_FAT16 => "FAT16",
+            PART_TYPE_NTFS => "NTFS/exFAT",
+            PART_TYPE_FAT32 => "FAT32",
+            PART_TYPE_FAT32_LBA => "FAT32 (LBA)",
+            PART_TYPE_FAT16_LBA => "FAT16 (LBA)",
+            PART_TYPE_EXTENDED_LBA => "Extended (LBA)",
+            PART_TYPE_LINUX_SWAP => "Linux Swap",
+            PART_TYPE_LINUX => "Linux",
+            PART_TYPE_LINUX_EXTENDED => "Linux Extended",
+            PART_TYPE_LVM => "Linux LVM",
+            PART_TYPE_FREEBSD => "FreeBSD",
+            PART_TYPE_OPENBSD => "OpenBSD",
+            PART_TYPE_NETBSD => "NetBSD",
+            PART_TYPE_APPLE_HFS => "Apple HFS/HFS+",
+            PART_TYPE_SOLARIS => "Solaris",
+            PART_TYPE_GPT => "GPT Protective",
+            PART_TYPE_EFI_SYSTEM => "EFI System",
+            _ => "Unknown",
+        }
+    }
+    
+    pub fn get_size_mb(&self) -> u64 {
+        (self.size_sectors as u64 * 512) / (1024 * 1024)
     }
 }
 
@@ -189,6 +245,18 @@ pub fn detect_partitions(_device: &BlockDevice) -> Result<usize, DiskError> {
             for part in &mbr.partitions {
                 if part.is_valid() {
                     count += 1;
+                    
+                    // Check if this is a swap partition
+                    if part.is_swap() {
+                        // Register as swap space
+                        let swap = crate::swap::SwapSpace::new(
+                            _device.id,
+                            part.start_lba as u64,
+                            part.size_sectors as u64
+                        );
+                        let _ = crate::swap::register_swap(swap);
+                    }
+                    
                     // Create logical block device for this partition
                     // Register partition device
                 }

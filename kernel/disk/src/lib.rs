@@ -10,11 +10,13 @@ pub mod block_device;
 pub mod ata;
 pub mod cache;
 pub mod partition;
+pub mod swap;
 
 pub use block_device::*;
 pub use ata::*;
 pub use cache::*;
 pub use partition::*;
+pub use swap::*;
 
 /// Initialize disk subsystem
 pub fn init() -> usize {
