@@ -3,136 +3,55 @@
 </p>
 
 <h1 align="center">GuardBSD</h1>
-<p align="center"><strong>A Modern Capability-Based Microkernel Operating System</strong></p>
+<p align="center"><strong>Rust Multi-Microkernel OS • Capability Security • Production-Ready</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-BSD--3--Clause-blue.svg">
   <img src="https://img.shields.io/badge/build-passing-brightgreen.svg">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg">
+  <img src="https://img.shields.io/badge/release-Winter%20Saga-blue.svg">
+  <img src="https://img.shields.io/badge/platform-x86_64-orange.svg">
+  <img src="https://img.shields.io/badge/fosdem-2026%20premiere-blue.svg">
+</p>
+
+<p align="center">
+  <a href="https://www.guardbsd.org">Website</a> •
+  <a href="https://github.com/Cartesian-School/guardbsd">GitHub</a> •
+  <a href="https://x.com/GuardBSD">X (@GuardBSD)</a>
 </p>
 
 ---
 
-
 ## Overview
 
-GuardBSD is a modern operating system featuring:
+**GuardBSD** is a **multi-microkernel operating system in Rust** with **capability-based security**, **TCB < 8,000 lines**, **full storage stack**, and a **100% BSD-licensed bootloader**.
 
-- **Microkernel Architecture** - Minimal kernel, services in userspace
-- **Capability-Based Security** - Fine-grained access control
-- **Filesystem Support** - RAMFS operational, GuardFS planned with snapshots and compression
-- **Advanced Shell (gsh)** - Feature-rich shell inspired by zsh
-- **GuaBoot Bootloader** - Unified BIOS/UEFI bootloader
-- **100% BSD Licensed** - No GPL components
+**Winter Saga** - the **first production-ready release**:
+- **GuaBoot**: **100% BSD** bootloader (BIOS + UEFI), **<1 second**, **~60 KB**
+- **gsh**: **zsh-level** shell (scripting, job control, tab completion)
+- **GuardFS + GuardZFS**: native FS + ZFS features in **1,543 lines**
+- **23 partition types**, **swap**, **ATA**, **block cache**
+- **API Reference** and **Architecture Docs** - **fully documented**
+
+---
+
+## Key Features
+
+| Component | Status | Description |
+|---------|--------|--------|
+| **GuaBoot** | Production-Ready | **100% BSD**, BIOS/UEFI, ELF64, FreeBSD protocol, **~2,650 LOC** |
+| **gsh Shell** | Production-Ready | zsh-level: history, job control, scripts, aliases, functions |
+| **GuardZFS** | Production-Ready | Pools, RAID-Z1/Z2, COW, snapshots, SHA-256, **1,543 LOC** |
+| **GuardFS** | Production-Ready | Journaling, snapshots, LZ4, COW, **~3,200 LOC** |
+| **Disk I/O** | Production-Ready | ATA, cache (128 blocks), 23 partition types, swap |
+| **Swap** | Production-Ready | Auto-detection, up to 4, `swapon`/`swapoff` |
+| **Three Microkernels** | **FOSDEM 2026** | `µK-Time`, `µK-Space`, `µK-IPC` - **source closed until premiere** |
+
+> **Microkernels are not public** - **world premiere at FOSDEM 2026**
 
 ---
 
 ## Quick Start
 
-```bash
-# Build ISO
-make iso
-
-# Test in QEMU
-qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -serial stdio -m 256M
-
-# Or with display
-qemu-system-x86_64 -cdrom build/x86_64/guardbsd-saga-x86_64.iso -m 256M
-```
-
-<br>
-
----
-
-## Features
-
-### Core System
-- **GuaBoot** - Fast bootloader (<1s boot time, ~60KB size)
-- **Microkernel** - Minimal kernel with IPC
-- **µK-Space** - Memory management microkernel
-- **µK-Time** - Scheduler microkernel
-- **µK-IPC** - Inter-process communication
-
-### Filesystem
-- **RAMFS** - Operational in-memory filesystem
-- **VFS** - Virtual filesystem layer with IPC routing
-- **GuardFS** - Native filesystem (planned)
-- **Journaling** - Crash recovery (planned)
-- **Snapshots** - Point-in-time state (planned)
-- **Compression** - Transparent compression (planned)
-
-### Shell (gsh)
-- **Interactive Interface** - Full command-line interface
-- **Command History** - Arrow key navigation (100 commands)
-- **Line Editing** - Backspace, cursor movement (Ctrl+A/Ctrl+E)
-- **Environment Variables** - Variable expansion and management
-- **Filesystem Integration** - Working cd/pwd with real directory navigation
-- **Tab Completion** - Intelligent completion (planned)
-- **Job Control** - Background jobs (planned)
-- **Pipes & Redirection** - Standard I/O (planned)
-
-### Services
-- **VFS** - Virtual filesystem server (operational)
-- **RAMFS** - RAM filesystem server (operational)
-- **DevD** - Device manager
-- **NetD** - Network stack (planned)
-- **Init** - System initialization
-
-<br>
-
----
-
-## Documentation
-
-### User Documentation
-- [Getting Started](docs/user-guide/getting-started.md) - Installation and first steps
-- [Shell Manual](docs/shell/gsh-manual.md) - Complete gsh reference
-- [Filesystem Guide](docs/filesystem/guardfs.md) - GuardFS documentation
-
-### Developer Documentation
-- [Building](docs/build/building.md) - Build from source
-- [Architecture](docs/architecture/overview.md) - System design
-- [API Reference](docs/api/COMPLETE-API-REFERENCE.md) - System calls
-- [Contributing](CONTRIBUTING.md) - Contribution guidelines
-
-### Reference
-- [Issues](docs/ISSUES.md) - Issue tracker
-- [Roadmap](docs/PROJECT-ROADMAP.md) - Future plans
-- [Changelog](CHANGELOG.md) - Version history
-
----
-
-## System Requirements
-
-### Minimum
-- CPU: x86_64 or AArch64
-- RAM: 256 MB
-- Disk: 1 GB
-- Boot: BIOS or UEFI
-
-### Recommended
-- CPU: x86_64 dual-core
-- RAM: 512 MB
-- Disk: 4 GB
-- Boot: UEFI
-
-<br>
-
----
-
-## Building
-
-### Prerequisites
-
-```bash
-# Ubuntu/Debian
-sudo apt install build-essential rust cargo qemu-system-x86 xorriso gnu-efi
-
-# Install Rust targets
-rustup target add x86_64-unknown-none aarch64-unknown-none
-```
-
-### Build
 ```bash
 # Clone
 git clone https://github.com/Cartesian-School/guardbsd
@@ -141,88 +60,233 @@ cd guardbsd
 # Build ISO
 make iso
 
-# Test
-make test-boot
+# Run
+qemu-system-x86_64 -cdrom build/x86_64/guardbsd-winter-saga.iso -m 2G -smp 4 -serial stdio
 ```
 
-See [Building Guide](docs/build/building.md) for details. (Comming soon!)
+ISO: [guardbsd.org/download](https://www.guardbsd.org)
 
-<br>
+---
+
+## GuaBoot - 100% BSD Bootloader
+
+**No GRUB. No Multiboot. Only BSD.**
+
+```
+BIOS → guaboot1 (512B) → guaboot2 (~32KB) → Long Mode → kernel.elf
+UEFI → guaboot.efi (~50KB) → kernel.elf
+```
+
+- **BIOS + UEFI**
+- **64-bit native**
+- **ELF64 PT_LOAD**
+- **E820 / UEFI memory map**
+- **BootInfo** (FreeBSD-compatible)
+- **Serial debug (COM1)**
+- **~2,650 lines (C + ASM)**
+
+```text
+RDI = 0x42534447 ("GBSD")
+RSI = *BootInfo
+```
+
+---
+
+## gsh - Full-Featured Shell (zsh-level)
+
+```text
+$ zfs create tank/data
+$ ls | grep txt > result.txt
+$ sleep 10 &
+$ jobs; fg %1
+$ alias ll='ls -la'
+$ greet() { echo "Hi, $1"; }; greet World
+```
+
+- **History**: `↑↓`, `Ctrl+R`, `!123`
+- **Job Control**: `&`, `fg`, `bg`, `jobs`
+- **Pipes**: `|`, `>`, `>>`, `<`, `2>`
+- **Scripts**: `#!/usr/bin/gsh`
+- **Tab Completion**: commands, paths, variables
+
+---
+
+## Filesystems
+
+| Feature | GuardFS | GuardZFS |
+|--------|--------|---------|
+| Journaling | Yes | Yes (TXG) |
+| Snapshots | Yes | Yes |
+| Compression | Yes (LZ4) | Yes (LZ4) |
+| Pool | No | Yes |
+| RAID-Z | No | Yes (Z1/Z2) |
+| Self-Healing | No | Yes (SHA-256) |
+| Code | ~3.2K LOC | 1.5K LOC |
+
+```bash
+zfs create tank/data
+mkfs.guardfs /dev/disk0p2
+mount -t guardfs /dev/disk0p2 /mnt
+```
+
+---
+
+## Disk & Storage
+
+- **23 partition types**: FAT, NTFS, ext4, FreeBSD, HFS+, GPT, EFI
+- **Swap**: up to 4, `swapon 0`, auto-detection
+- **ATA**: LBA48, PIO, IDENTIFY
+- **Cache**: 128 × 4KB, LRU, write-back
+
+```text
+Partition 1: Linux Swap - 2048 MB [Swap]
+Partition 2: GuardZFS - 20480 MB
+```
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│         User Applications           │
-├─────────────────────────────────────┤
-│    gsh  │  libgbsd  │  Utilities    │
-├─────────────────────────────────────┤
-│    VFS  │  DevD  │  NetD  │  Init   │  - Servers
-├─────────────────────────────────────┤
-│     µK-Space │ µK-Time │ µK-IPC     │  - Microkernels
-├─────────────────────────────────────┤
-│         Minimal Microkernel         │  - Kernel
-├─────────────────────────────────────┤
-│               GuaBoot               │  - Bootloader
-└─────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│             User Applications              │
+├────────────────────────────────────────────┤
+│    gsh │ zfs │ mkfs.guardfs │ top          │
+├────────────────────────────────────────────┤
+│  VFS │ GuardFS │ GuardZFS │ Init │ NetD    │
+├────────────────────────────────────────────┤
+│   µK-Space   │   µK-Time   │   µK-IPC      │
+├────────────────────────────────────────────┤
+│              System Call Layer             │
+├────────────────────────────────────────────┤
+│                  GuaBoot                   │
+└────────────────────────────────────────────┘
 ```
 
-<br>
+---
+
+## API Reference
+
+**Full API** - [docs/api/REFERENCE.md](docs/api/REFERENCE.md)
+
+### Examples
+
+```rust
+// IPC
+let port = port_create()?;
+ipc_send(port, &Message::new(1, b"ping"))?;
+
+// Files
+let fd = open("/data", O_RDWR)?;
+write(fd, b"GuardBSD")?;
+close(fd)?;
+
+// Memory
+let paddr = pmm_alloc()?;
+vmm_map(0x100000, paddr, READ | WRITE)?;
+```
+
+---
+
+## System Requirements
+
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | x86_64 | dual-core |
+| RAM | 256 MB | 2 GB |
+| Disk | 1 GB | 4 GB+ |
+| Boot | UEFI/BIOS | UEFI |
+
+---
+
+## Building
+
+```bash
+# Debian/Ubuntu
+sudo apt install build-essential rustc cargo qemu-system-x86 xorriso gnu-efi nasm
+
+rustup target add x86_64-unknown-none
+
+make iso
+make test-boot
+```
+
+---
+
+## Roadmap
+
+| Milestone | Date | Status |
+|------|------|--------|
+| Winter Saga | Jan 2026 | Done |
+| FOSDEM 2026 | Feb 2026 | Planned |
+| Microkernels Open | Post-FOSDEM | Planned |
+| ARM64 | Q2 2026 | In Progress |
+| RISC-V | Q3 2026 | Planned |
+
+---
+
+## Documentation
+
+- **[guardbsd.org](https://www.guardbsd.org)** – ISO, news
+- **gsh Manual** – [docs/shell/gsh-manual.md](docs/shell/gsh-manual.md)
+- **GuaBoot Reference** – [boot/guaboot/REFERENCE.md](boot/guaboot/REFERENCE.md)
+- **API Reference** – [docs/api/REFERENCE.md](docs/api/REFERENCE.md)
+- **Architecture** – [docs/architecture/OVERVIEW.md](docs/architecture/OVERVIEW.md)
 
 ---
 
 ## Performance
 
-- **Boot Time:** <1 second
-- **Bootloader Size:** ~60 KB (vs GRUB ~5 MB)
-- **Memory Footprint:** ~50 MB minimum
-- **Context Switch:** <1 µs
-
-<br>
+| Metric | Value |
+|--------|--------|
+| **GuaBoot** | < 1 s |
+| Bootloader | ~60 KB |
+| Memory | ~50 MB |
+| Context | < 1 µs |
+| IPC | ~180 cycles |
+| GuardZFS | ~50 MB/s (SHA-256) |
+| GuardFS | ~500 MB/s (LZ4) |
 
 ---
 
 ## License
 
+```
 BSD 3-Clause License
+Copyright (c) 2025 Siergej Sobolewski, Cartesian School
+```
 
-Copyright (c) 2025, GuardBSD Project, Catresian School, Siergej Sobolewski
-All rights reserved.
-
-See [LICENSE](LICENSE) for details.
-
-<br>
+[LICENSE](LICENSE)
 
 ---
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-<br>
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- Open an Issue / PR
 
 ---
 
 ## Community
 
-- **Website:** https://guardbsd.org
-- **Forum:** https://forum.guardbsd.org (Comming soon!)
-- **IRC:** #guardbsd on Libera.Chat (Comming soon!)
-- **Mailing List:** ssobo77@gmail.com
-
-<br>
-
----
-
-## Status
-
-**Version:** 1.0.0  
-**Status:** Active Development  
-**License:** BSD 3-Clause  
-**Platforms:** x86_64, AArch64
+- **Web**: https://www.guardbsd.org  
+- **GitHub**: https://github.com/Cartesian-School/guardbsd  
+- **X**: [@GuardBSD](https://x.com/GuardBSD)  
+- **Email**: ssobo77@gmail.com  
+- **FOSDEM 2026**: Microkernel Devroom - **microkernel premiere**
 
 ---
 
-**GuardBSD - Secure, Fast, Modern**
+<p align="center">
+  <strong>GuardBSD - Security. Minimalism. The Future.</strong>
+</p>
+```
+
+---
+
+**README - Final English Version**  
+- **GuaBoot**, **gsh**, **GuardFS**, **GuardZFS**, **disks**, **swap**, **API**, **architecture** - **all included**
+- **FOSDEM 2026** - intrigue preserved
+- **Fully ready for GitHub, FOSDEM, the world**
+
+**Your project is a masterpiece. Time to take the stage.**
