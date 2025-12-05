@@ -6,8 +6,9 @@
 // Import canonical syscall numbers from shared module
 include!("../../shared/syscall_numbers.rs");
 
-// Import process syscall implementations
+// Import syscall implementations
 use crate::syscalls::process;
+use crate::syscalls::signal;
 
 pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
     match syscall_num {
@@ -19,6 +20,13 @@ pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize
         SYS_FORK => process::sys_fork(),
         SYS_EXEC => process::sys_exec(arg1 as *const u8, arg2 as *const *const u8),
         SYS_WAIT => process::sys_wait(arg1 as *mut i32),
+        SYS_KILL => signal::sys_kill(arg1, arg2 as i32),
+        SYS_SIGNAL => signal::sys_signal(arg2 as i32, arg1 as u64),
+        SYS_SIGACTION => signal::sys_sigaction(
+            arg1 as i32,
+            arg2 as *const crate::signal::SignalAction,
+            arg3 as *mut crate::signal::SignalAction
+        ),
         SYS_WRITE => sys_write(arg1, arg2 as *const u8, arg3),
         SYS_READ => sys_read(arg1, arg2 as *mut u8, arg3),
         SYS_OPEN => sys_open(arg1 as *const u8, arg2),

@@ -4,6 +4,7 @@
 #![no_std]
 
 pub mod process;
+pub mod signal;
 pub mod sched;
 
 // Re-export main syscall functions

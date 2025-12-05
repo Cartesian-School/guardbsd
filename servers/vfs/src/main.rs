@@ -22,6 +22,7 @@ enum MountType {
     DevFs,
 }
 
+#[derive(Copy, Clone)]
 struct MountPoint {
     path: [u8; 256],
     path_len: usize,
@@ -117,7 +118,7 @@ fn vfs_main() -> ! {
         // Wait for VFS requests via IPC
         if port_receive(port, req_buf.as_mut_ptr(), req_buf.len()).is_ok() {
             let req = VfsRequest::from_bytes(&req_buf);
-            let resp = process_vfs_request(&req, &mut mounts, port);
+            let resp = process_vfs_request(&req, &mut mounts, port as usize);
 
             // Send response
             resp_buf.copy_from_slice(&resp.to_bytes());

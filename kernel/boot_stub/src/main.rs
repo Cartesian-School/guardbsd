@@ -18,29 +18,53 @@ mod syscall {
     use super::syscall::*;
 
     pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
+        // Day 29: Updated syscall handler - delegate to main kernel implementations
         match syscall_num {
-            SYS_EXIT => sys_exit(arg1 as i32),
+            // Process management (Day 29)
+            SYS_EXIT => {
+                crate::syscalls::process::sys_exit(arg1 as i32);
+            },
+            SYS_GETPID => crate::syscalls::process::sys_getpid(),
+            SYS_FORK => crate::syscalls::process::sys_fork(),
+            SYS_EXEC => crate::syscalls::process::sys_exec(arg1 as *const u8, arg2 as *const *const u8),
+            SYS_WAIT => crate::syscalls::process::sys_wait(arg1 as *mut i32),
+            SYS_YIELD => {
+                // Yield to scheduler
+                crate::sched::yield_current();
+                0
+            },
+            
+            // Signal management (Day 29)
+            SYS_KILL => crate::syscalls::signal::sys_kill(arg1, arg2 as i32),
+            SYS_SIGNAL => crate::syscalls::signal::sys_signal(arg2 as i32, arg1 as u64),
+            SYS_SIGACTION => crate::syscalls::signal::sys_sigaction(
+                arg1 as i32,
+                arg2 as *const crate::signal::SignalAction,
+                arg3 as *mut crate::signal::SignalAction
+            ),
+            
+            // File operations (still using local stubs)
             SYS_WRITE => sys_write(arg1, arg2 as *const u8, arg3),
-            SYS_READ => ENOSYS,
-            SYS_EXEC => ENOSYS,
-            SYS_YIELD => ENOSYS,
-            SYS_GETPID => ENOSYS,
-            SYS_FORK => ENOSYS,
-            SYS_WAIT => ENOSYS,
-            SYS_OPEN => ENOSYS,
-            SYS_CLOSE => ENOSYS,
-            SYS_MKDIR => ENOSYS,
-            SYS_STAT => ENOSYS,
-            SYS_RENAME => ENOSYS,
-            SYS_UNLINK => ENOSYS,
-            SYS_SYNC => ENOSYS,
+            SYS_READ => ENOSYS,  // TODO: Implement when VFS ready
+            SYS_OPEN => ENOSYS,  // TODO: Implement when VFS ready
+            SYS_CLOSE => ENOSYS, // TODO: Implement when VFS ready
+            SYS_MKDIR => ENOSYS, // TODO: Implement when VFS ready
+            SYS_STAT => ENOSYS,  // TODO: Implement when VFS ready
+            SYS_RENAME => ENOSYS, // TODO: Implement when VFS ready
+            SYS_UNLINK => ENOSYS, // TODO: Implement when VFS ready
+            SYS_SYNC => ENOSYS,  // TODO: Implement when VFS ready
+            
+            // Logging (still using local stubs)
             SYS_LOG_READ => ENOSYS,
             SYS_LOG_ACK => ENOSYS,
             SYS_LOG_REGISTER_DAEMON => ENOSYS,
+            
+            // IPC
             SYS_IPC_PORT_CREATE => sys_ipc_port_create(),
-            SYS_IPC_SEND => sys_ipc_send(arg1, arg2, arg3 as u32, [0, 0, 0, 0]), // Simplified
+            SYS_IPC_SEND => sys_ipc_send(arg1, arg2, arg3 as u32, [0, 0, 0, 0]),
             SYS_IPC_RECV => sys_ipc_recv(arg1),
-            _ => ENOSYS,
+            
+            _ => -1, // EINVAL for unknown syscalls
         }
     }
 

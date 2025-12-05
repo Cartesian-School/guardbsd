@@ -8,6 +8,7 @@ use crate::vnode::*;
 use gbsd::*;
 
 #[repr(u32)]
+#[derive(Copy, Clone)]
 pub enum VfsOp {
     Open = 1,
     Close = 2,
@@ -148,11 +149,14 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
     }
 
     // Prepare IPC message to RAMFS
-    // For now, we'll send the raw request data
+    // Format: [op:u32][reply_port:u32][path:256][flags:u32][mode:u32]
     let mut ipc_buf = [0u8; 512];
 
     // Copy operation code
     ipc_buf[0..4].copy_from_slice(&(req.op as u32).to_le_bytes());
+    
+    // Copy reply-to port (VFS port where RAMFS should send response)
+    ipc_buf[4..8].copy_from_slice(&(vfs_port as u32).to_le_bytes());
 
     // Copy path
     let path_len = req.path.iter().position(|&c| c == 0).unwrap_or(req.path.len());
@@ -163,10 +167,10 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
     ipc_buf[260..264].copy_from_slice(&req.mode.to_le_bytes());
 
     // Send to RAMFS server
-    if port_send(ramfs_port, ipc_buf.as_ptr(), 512).is_ok() {
+    if port_send(ramfs_port as u64, ipc_buf.as_ptr(), 512).is_ok() {
         // Wait for response
         let mut resp_buf = [0u8; 512];
-        if port_receive(vfs_port, resp_buf.as_mut_ptr(), 512).is_ok() {
+        if port_receive(vfs_port as u64, resp_buf.as_mut_ptr(), 512).is_ok() {
             // Parse response
             let result = i64::from_le_bytes([
                 resp_buf[0], resp_buf[1], resp_buf[2], resp_buf[3],
@@ -176,7 +180,7 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
             if result >= 0 {
                 VfsResponse::ok(result as u64)
             } else {
-                VfsResponse::err((-result) as u32)
+                VfsResponse::err(-result)
             }
         } else {
             klog_error!("vfs", "failed to receive response from RAMFS");
