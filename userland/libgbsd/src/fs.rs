@@ -42,7 +42,7 @@ pub fn open(path: &[u8], flags: u64) -> Result<Fd> {
     let ret = unsafe { syscall2(SYS_OPEN as u64, path.as_ptr() as u64, flags) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(ret as Fd)
     }
@@ -56,7 +56,7 @@ pub fn close(fd: Fd) -> Result<()> {
     let ret = unsafe { syscall1(SYS_CLOSE as u64, fd) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -70,7 +70,7 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize> {
     let ret = unsafe { syscall3(SYS_READ as u64, fd, buf.as_mut_ptr() as u64, buf.len() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(usize::try_from(ret).unwrap_or(0))
     }
@@ -84,7 +84,7 @@ pub fn write(fd: Fd, buf: &[u8]) -> Result<usize> {
     let ret = unsafe { syscall3(SYS_WRITE as u64, fd, buf.as_ptr() as u64, buf.len() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(usize::try_from(ret).unwrap_or(0))
     }
@@ -98,7 +98,7 @@ pub fn mkdir(path: &[u8]) -> Result<()> {
     let ret = unsafe { syscall2(SYS_MKDIR as u64, path.as_ptr() as u64, 0o755) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -116,7 +116,7 @@ pub fn stat(path: &[u8]) -> Result<Stat> {
     let ret = unsafe { syscall2(SYS_STAT as u64, path.as_ptr() as u64, &mut stat_buf as *mut Stat as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(stat_buf)
     }
@@ -130,7 +130,7 @@ pub fn rename(old_path: &[u8], new_path: &[u8]) -> Result<()> {
     let ret = unsafe { syscall2(SYS_RENAME as u64, old_path.as_ptr() as u64, new_path.as_ptr() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -144,7 +144,7 @@ pub fn unlink(path: &[u8]) -> Result<()> {
     let ret = unsafe { syscall1(SYS_UNLINK as u64, path.as_ptr() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -158,7 +158,7 @@ pub fn sync(fd: Fd) -> Result<()> {
     let ret = unsafe { syscall1(SYS_SYNC as u64, fd) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -172,7 +172,7 @@ pub fn chdir(path: &[u8]) -> Result<()> {
     let ret = unsafe { syscall1(SYS_CHDIR as u64, path.as_ptr() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -186,7 +186,7 @@ pub fn getcwd(buf: &mut [u8]) -> Result<usize> {
     let ret = unsafe { syscall2(SYS_GETCWD as u64, buf.as_mut_ptr() as u64, buf.len() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(ret as usize)
     }
@@ -200,7 +200,7 @@ pub fn mount(source: &[u8], target: &[u8], fstype: &[u8]) -> Result<()> {
     let ret = unsafe { syscall3(SYS_MOUNT as u64, source.as_ptr() as u64, target.as_ptr() as u64, fstype.as_ptr() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -214,7 +214,7 @@ pub fn umount(target: &[u8]) -> Result<()> {
     let ret = unsafe { syscall1(SYS_UMOUNT as u64, target.as_ptr() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(Error::from_code((-ret_i64) as u64))
+        Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }

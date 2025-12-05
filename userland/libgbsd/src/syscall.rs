@@ -186,7 +186,7 @@ pub fn getpid() -> Result<u64> {
     let ret = unsafe { syscall0(SYS_GETPID as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(crate::error::Error::from_code((-ret_i64) as u64))
+        Err(crate::error::Error::from_code((-ret_i64) as i32))
     } else {
         Ok(ret)
     }
@@ -197,7 +197,7 @@ pub fn fork() -> Result<u64> {
     let ret = unsafe { syscall0(SYS_FORK as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(crate::error::Error::from_code((-ret_i64) as u64))
+        Err(crate::error::Error::from_code((-ret_i64) as i32))
     } else {
         Ok(ret)
     }
@@ -208,7 +208,7 @@ pub fn exec(path: &[u8]) -> Result<()> {
     let ret = unsafe { syscall1(SYS_EXEC as u64, path.as_ptr() as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(crate::error::Error::from_code((-ret_i64) as u64))
+        Err(crate::error::Error::from_code((-ret_i64) as i32))
     } else {
         Ok(())
     }
@@ -219,7 +219,7 @@ pub fn wait(status: &mut i32) -> Result<u64> {
     let ret = unsafe { syscall1(SYS_WAIT as u64, status as *mut i32 as u64) };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
-        Err(crate::error::Error::from_code((-ret_i64) as u64))
+        Err(crate::error::Error::from_code((-ret_i64) as i32))
     } else {
         Ok(ret)
     }

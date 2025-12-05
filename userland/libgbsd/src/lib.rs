@@ -12,6 +12,7 @@ pub mod error;
 pub mod fs;
 pub mod device;
 pub mod log;
+pub mod process;
 
 pub use error::{Error, Result};
 pub use syscall::*;

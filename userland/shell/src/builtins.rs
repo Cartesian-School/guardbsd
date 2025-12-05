@@ -17,6 +17,9 @@ pub enum Builtin {
     Unset,
     Env,
     History,
+    Fg,
+    Bg,
+    Jobs,
 }
 
 impl Builtin {
@@ -32,6 +35,9 @@ impl Builtin {
             b"unset" => Some(Builtin::Unset),
             b"env" => Some(Builtin::Env),
             b"history" => Some(Builtin::History),
+            b"fg" => Some(Builtin::Fg),
+            b"bg" => Some(Builtin::Bg),
+            b"jobs" => Some(Builtin::Jobs),
             _ => None,
         }
     }

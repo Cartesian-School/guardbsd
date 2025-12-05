@@ -21,18 +21,18 @@ pub enum Error {
 
 impl Error {
     #[must_use]
-    pub fn from_code(code: u64) -> Self {
-        match code {
+    pub fn from_code(code: i32) -> Self {
+        match code as i64 {
             0 => Error::Ok,
-            0xFFFF_FFFF_0000_0002 => Error::NoMemory,
-            0xFFFF_FFFF_0000_0003 => Error::PortInvalid,
-            0xFFFF_FFFF_0000_0004 => Error::PortFull,
-            0xFFFF_FFFF_0000_0005 => Error::NoRights,
-            0xFFFF_FFFF_0000_0006 => Error::CapInvalid,
-            0xFFFF_FFFF_0000_0007 => Error::Alignment,
-            0xFFFF_FFFF_0000_0100 => Error::Again,
-            0xFFFF_FFFF_0000_0200 => Error::Permission,
-            0xFFFF_FFFF_FFFF_FFDA => Error::NoSys, // -38 ENOSYS
+            2 => Error::NoMemory,
+            3 => Error::PortInvalid,
+            4 => Error::PortFull,
+            5 => Error::NoRights,
+            6 => Error::CapInvalid,
+            7 => Error::Alignment,
+            11 => Error::Again,  // EAGAIN
+            13 => Error::Permission, // EACCES
+            38 => Error::NoSys, // ENOSYS
             _ => Error::Invalid,
         }
     }

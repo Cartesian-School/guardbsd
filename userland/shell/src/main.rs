@@ -12,9 +12,15 @@ mod exec;
 mod io;
 mod parser;
 mod env;
+mod completion;
+mod redirect;
+mod spawn;
+mod jobs;
 
 use gbsd::*;
 use crate::env::*;
+use crate::completion::Completer;
+use crate::jobs::JobControl;
 
 const MAX_LINE: usize = 256;
 const MAX_HISTORY: usize = 100;
@@ -28,6 +34,8 @@ struct Shell {
     line_len: usize,      // Total length of current line
     prompt: &'static [u8],
     env: Environment,
+    completer: Completer,
+    jobs: JobControl,
 }
 
 impl Shell {
@@ -44,6 +52,8 @@ impl Shell {
             line_len: 0,
             prompt: b"gsh> ",
             env,
+            completer: Completer::new(),
+            jobs: JobControl::new(),
         }
     }
 
@@ -119,6 +129,9 @@ impl Shell {
                         4 => { // Ctrl+D (EOF)
                             let _ = println(b"");
                             return false;
+                        }
+                        9 => { // Tab - completion
+                            self.handle_tab_completion();
                         }
                         _ => {
                             if self.line_pos < MAX_LINE - 1 && self.line_len < MAX_LINE - 1 && c >= 32 && c <= 126 {
@@ -254,6 +267,34 @@ impl Shell {
         let _ = gbsd::write(1, b"\x1b[K");
     }
 
+    fn handle_tab_completion(&mut self) {
+        // Find completion for current line
+        if let Some(completion) = self.completer.complete(&self.current_line[..self.line_len], self.line_pos) {
+            // Find word start
+            let mut word_start = self.line_pos;
+            while word_start > 0 && self.current_line[word_start - 1] != b' ' && self.current_line[word_start - 1] != b'\t' {
+                word_start -= 1;
+            }
+            
+            // Replace from word_start to cursor with completion
+            let comp_len = completion.len();
+            if word_start + comp_len < MAX_LINE {
+                // Clear old word
+                self.line_len = word_start;
+                
+                // Insert completion
+                self.current_line[word_start..word_start + comp_len].copy_from_slice(completion);
+                self.line_len = word_start + comp_len;
+                self.line_pos = self.line_len;
+                
+                // Redisplay
+                self.clear_line();
+                let _ = gbsd::write(1, b"\r");
+                self.display_prompt();
+                let _ = gbsd::write(1, &self.current_line[..self.line_len]);
+            }
+        }
+    }
 
     fn add_to_history(&mut self) {
         if self.line_len == 0 {
@@ -276,6 +317,9 @@ impl Shell {
             return; // Empty line
         }
 
+        // Check for completed jobs first
+        self.jobs.check_jobs();
+
         // Add to history
         self.add_to_history();
 
@@ -283,9 +327,41 @@ impl Shell {
         let mut expanded_line = [0u8; MAX_LINE];
         let expanded_len = self.env.expand_variables(&self.current_line[..self.line_len], &mut expanded_line);
 
-        // Parse and execute
-        if let Some(cmd) = parser::Command::parse(&expanded_line[..expanded_len]) {
-            let _ = exec::execute(&cmd, &mut self.env, &self.history, self.history_count);
+        // Check for pipes
+        let pipeline = redirect::Pipeline::parse(&expanded_line[..expanded_len]);
+        if pipeline.has_pipe() {
+            // Execute pipeline
+            let _ = pipeline.execute();
+            return;
+        }
+
+        // Parse redirections
+        let (redirect_opt, cmd_part) = redirect::Redirect::parse(&expanded_line[..expanded_len]);
+        
+        // Parse command
+        if let Some(cmd) = parser::Command::parse(cmd_part) {
+            // Apply redirections
+            let mut saved_stdout = None;
+            let mut saved_stdin = None;
+            if let Some(ref redir) = redirect_opt {
+                let _ = redir.apply(&mut saved_stdout, &mut saved_stdin);
+            }
+            
+            // Execute command
+            if cmd.background {
+                // Background job
+                let spawner = spawn::ProcessSpawner::new(&self.env);
+                if let Ok(pid) = spawner.spawn(&cmd, &self.env) {
+                    self.jobs.add_job(pid, cmd_part, true);
+                }
+            } else {
+                let _ = exec::execute(&cmd, &mut self.env, &self.history, self.history_count, &mut self.jobs);
+            }
+            
+            // Restore redirections
+            if redirect_opt.is_some() {
+                let _ = redirect::Redirect::restore(saved_stdout, saved_stdin);
+            }
         }
     }
 }

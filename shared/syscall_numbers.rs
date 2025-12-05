@@ -4,9 +4,7 @@
 //
 // This is the SINGLE source of truth for all syscall numbers.
 // All kernel and userland code MUST use these constants.
-//
-// Note: This file is designed to be included via include!() macro,
-// so it doesn't have its own #![no_std] attribute.
+
 
 // Process Management Syscalls
 pub const SYS_EXIT: usize = 0;

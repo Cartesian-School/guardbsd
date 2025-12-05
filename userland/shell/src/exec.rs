@@ -8,19 +8,31 @@ use gbsd::*;
 use crate::parser::Command;
 use crate::builtins::Builtin;
 use crate::io::*;
+use crate::spawn::ProcessSpawner;
+use crate::jobs::JobControl;
 
-pub fn execute(cmd: &Command, env: &mut crate::env::Environment, history: &[Option<[u8; 256]>; 100], history_count: usize) -> Result<()> {
+pub fn execute(cmd: &Command, env: &mut crate::env::Environment, history: &[Option<[u8; 256]>; 100], history_count: usize, jobs: &mut JobControl) -> Result<()> {
     // Try built-in commands first
     if let Some(builtin) = Builtin::from_name(cmd.name) {
-        return execute_builtin(&builtin, cmd, env, history, history_count);
+        return execute_builtin(&builtin, cmd, env, history, history_count, jobs);
     }
     
-    // External command (future: spawn process)
-    println(b"External commands not yet supported")?;
-    Err(Error::Invalid)
+    // External command - spawn process
+    let spawner = ProcessSpawner::new(env);
+    match spawner.spawn(cmd, env) {
+        Ok(pid) => {
+            // Wait for child to complete
+            let _ = spawner.wait(pid);
+            Ok(())
+        }
+        Err(_) => {
+            println(b"Command not found")?;
+            Err(Error::NotFound)
+        }
+    }
 }
 
-fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Environment, history: &[Option<[u8; 256]>; 100], history_count: usize) -> Result<()> {
+fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Environment, history: &[Option<[u8; 256]>; 100], history_count: usize, jobs: &mut JobControl) -> Result<()> {
     match builtin {
         Builtin::Exit => {
             exit(0);
@@ -38,6 +50,9 @@ fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Envir
             println(b"  unset  - Unset variables")?;
             println(b"  env    - Show environment variables")?;
             println(b"  history- Show command history")?;
+            println(b"  fg     - Bring job to foreground")?;
+            println(b"  bg     - Send job to background")?;
+            println(b"  jobs   - List background jobs")?;
             Ok(())
         }
         Builtin::Echo => {
@@ -199,6 +214,42 @@ fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Envir
             }
             Ok(())
         }
+        Builtin::Fg => {
+            // Bring job to foreground
+            if cmd.arg_count > 0 {
+                if let Some(arg) = cmd.args[0] {
+                    // Parse job ID
+                    let job_id = parse_number(arg).unwrap_or(1);
+                    jobs.foreground(job_id)
+                }
+                else {
+                    println(b"fg: missing job ID")?;
+                    Err(Error::Invalid)
+                }
+            } else {
+                println(b"fg: missing job ID")?;
+                Err(Error::Invalid)
+            }
+        }
+        Builtin::Bg => {
+            // Send job to background
+            if cmd.arg_count > 0 {
+                if let Some(arg) = cmd.args[0] {
+                    let job_id = parse_number(arg).unwrap_or(1);
+                    jobs.background(job_id)
+                } else {
+                    println(b"bg: missing job ID")?;
+                    Err(Error::Invalid)
+                }
+            } else {
+                println(b"bg: missing job ID")?;
+                Err(Error::Invalid)
+            }
+        }
+        Builtin::Jobs => {
+            // List jobs
+            jobs.list_jobs()
+        }
     }
 }
 
@@ -232,4 +283,18 @@ fn print_number(mut num: usize) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn parse_number(s: &[u8]) -> Option<usize> {
+    let mut num = 0usize;
+    for &ch in s {
+        if ch >= b'0' && ch <= b'9' {
+            num = num * 10 + (ch - b'0') as usize;
+        } else if ch == 0 {
+            break;
+        } else {
+            return None;
+        }
+    }
+    Some(num)
 }
