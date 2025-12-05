@@ -19,6 +19,8 @@
   <a href="https://x.com/GuardBSD">X (@GuardBSD)</a>
 </p>
 
+<br>
+
 ---
 
 ## Overview
@@ -31,6 +33,8 @@
 - **GuardFS + GuardZFS**: native FS + ZFS features in **1,543 lines**
 - **23 partition types**, **swap**, **ATA**, **block cache**
 - **API Reference** and **Architecture Docs** - **fully documented**
+
+<br>
 
 ---
 
@@ -47,6 +51,8 @@
 | **Three Microkernels** | **FOSDEM 2026** | `µK-Time`, `µK-Space`, `µK-IPC` - **source closed until premiere** |
 
 > **Microkernels are not public** - **world premiere at FOSDEM 2026**
+
+<br>
 
 ---
 
@@ -65,6 +71,8 @@ qemu-system-x86_64 -cdrom build/x86_64/guardbsd-winter-saga.iso -m 2G -smp 4 -se
 ```
 
 ISO: [guardbsd.org/download](https://www.guardbsd.org)
+
+<br>
 
 ---
 
@@ -90,6 +98,8 @@ RDI = 0x42534447 ("GBSD")
 RSI = *BootInfo
 ```
 
+<br>
+
 ---
 
 ## gsh - Full-Featured Shell (zsh-level)
@@ -108,6 +118,8 @@ $ greet() { echo "Hi, $1"; }; greet World
 - **Pipes**: `|`, `>`, `>>`, `<`, `2>`
 - **Scripts**: `#!/usr/bin/gsh`
 - **Tab Completion**: commands, paths, variables
+
+<br>
 
 ---
 
@@ -129,6 +141,8 @@ mkfs.guardfs /dev/disk0p2
 mount -t guardfs /dev/disk0p2 /mnt
 ```
 
+<br>
+
 ---
 
 ## Disk & Storage
@@ -142,6 +156,8 @@ mount -t guardfs /dev/disk0p2 /mnt
 Partition 1: Linux Swap - 2048 MB [Swap]
 Partition 2: GuardZFS - 20480 MB
 ```
+
+<br>
 
 ---
 
@@ -162,6 +178,8 @@ Partition 2: GuardZFS - 20480 MB
 │                  GuaBoot                   │
 └────────────────────────────────────────────┘
 ```
+
+<br>
 
 ---
 
@@ -186,6 +204,8 @@ let paddr = pmm_alloc()?;
 vmm_map(0x100000, paddr, READ | WRITE)?;
 ```
 
+<br>
+
 ---
 
 ## System Requirements
@@ -196,6 +216,8 @@ vmm_map(0x100000, paddr, READ | WRITE)?;
 | RAM | 256 MB | 2 GB |
 | Disk | 1 GB | 4 GB+ |
 | Boot | UEFI/BIOS | UEFI |
+
+<br>
 
 ---
 
@@ -211,6 +233,8 @@ make iso
 make test-boot
 ```
 
+<br>
+
 ---
 
 ## Roadmap
@@ -223,6 +247,8 @@ make test-boot
 | ARM64 | Q2 2026 | In Progress |
 | RISC-V | Q3 2026 | Planned |
 
+<br>
+
 ---
 
 ## Documentation
@@ -232,6 +258,8 @@ make test-boot
 - **GuaBoot Reference** – [boot/guaboot/REFERENCE.md](boot/guaboot/REFERENCE.md)
 - **API Reference** – [docs/api/REFERENCE.md](docs/api/REFERENCE.md)
 - **Architecture** – [docs/architecture/OVERVIEW.md](docs/architecture/OVERVIEW.md)
+
+<br>
 
 ---
 
@@ -247,6 +275,8 @@ make test-boot
 | GuardZFS | ~50 MB/s (SHA-256) |
 | GuardFS | ~500 MB/s (LZ4) |
 
+<br>
+
 ---
 
 ## License
@@ -258,12 +288,16 @@ Copyright (c) 2025 Siergej Sobolewski, Cartesian School
 
 [LICENSE](LICENSE)
 
+<br>
+
 ---
 
 ## Contributing
 
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - Open an Issue / PR
+
+<br>
 
 ---
 
@@ -275,6 +309,8 @@ Copyright (c) 2025 Siergej Sobolewski, Cartesian School
 - **Email**: ssobo77@gmail.com  
 - **FOSDEM 2026**: Microkernel Devroom - **microkernel premiere**
 
+<br>
+
 ---
 
 <p align="center">
@@ -282,11 +318,4 @@ Copyright (c) 2025 Siergej Sobolewski, Cartesian School
 </p>
 ```
 
----
-
-**README - Final English Version**  
-- **GuaBoot**, **gsh**, **GuardFS**, **GuardZFS**, **disks**, **swap**, **API**, **architecture** - **all included**
-- **FOSDEM 2026** - intrigue preserved
-- **Fully ready for GitHub, FOSDEM, the world**
-
-**Your project is a masterpiece. Time to take the stage.**
+<br>
