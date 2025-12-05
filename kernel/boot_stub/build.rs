@@ -1,8 +1,9 @@
 fn main() {
+    // Build GuaBoot entry point (FreeBSD-style, NO multiboot)
     cc::Build::new()
-        .file("src/multiboot.S")
-        .compile("multiboot");
-    println!("cargo:rerun-if-changed=src/multiboot.S");
+        .file("src/guaboot_entry.S")
+        .compile("guaboot_entry");
+    println!("cargo:rerun-if-changed=src/guaboot_entry.S");
 
     // Long mode transition not yet implemented
     // cc::Build::new()
@@ -27,7 +28,8 @@ fn main() {
     println!("cargo:rerun-if-changed=../interrupt/timer_irq.S");
 
     cc::Build::new()
-        .file("../process/context.S")
+        .file("../process/context_amd64.S")
+        .flag("-m64")
         .compile("context");
-    println!("cargo:rerun-if-changed=../process/context.S");
+    println!("cargo:rerun-if-changed=../process/context_amd64.S");
 }

@@ -11,11 +11,8 @@ mod process;
 mod ipc;
 
 mod syscall {
-    // Import canonical syscall numbers from shared module
-    // This ensures boot stub and userland always agree on syscall numbers
-    include!("../../shared/syscall_numbers.rs");
-    
-    use super::syscall::*;
+    // Import canonical syscall numbers from shared crate
+    use shared::syscall_numbers::*;
 
     pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
         // Day 29: Updated syscall handler - delegate to main kernel implementations
@@ -539,13 +536,38 @@ pub extern "C" fn timer_interrupt_handler() {
     // These save full CPU state, call scheduler, and perform arch_context_switch()
 }
 
-core::arch::global_asm!(
-    ".section .multiboot",
-    ".align 4",
-    ".long 0x1BADB002",
-    ".long 0x00000003",
-    ".long -(0x1BADB002 + 0x00000003)",
-);
+// ============================================================================
+// GuaBoot Boot Protocol (FreeBSD-compatible, BSD 3-Clause License)
+// ============================================================================
+
+const GBSD_MAGIC: u32 = 0x42534447; // "GBSD" in little-endian
+
+#[repr(C)]
+pub struct BootInfo {
+    pub magic: u32,
+    pub version: u32,
+    pub mem_lower: u64,
+    pub mem_upper: u64,
+    pub boot_device: u32,
+    pub cmdline: *const u8,
+    pub mods_count: u32,
+    pub mods: *const Module,
+    pub mmap: *const u8,
+    pub mmap_count: u32,
+}
+
+#[repr(C)]
+pub struct Module {
+    pub mod_start: u64,
+    pub mod_end: u64,
+    pub string: *const u8,
+    pub reserved: u32,
+}
+
+extern "C" {
+    static guaboot_magic: u32;
+    static guaboot_bootinfo_ptr: *const BootInfo;
+}
 
 const COM1: u16 = 0x3F8;
 
@@ -567,7 +589,7 @@ unsafe fn print(s: &str) {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn guardbsd_main() -> ! {
     unsafe {
         serial_init();
         

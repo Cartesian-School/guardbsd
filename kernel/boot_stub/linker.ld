@@ -1,14 +1,14 @@
-OUTPUT_FORMAT(elf32-i386)
-OUTPUT_ARCH(i386)
-ENTRY(multiboot_header)
+OUTPUT_FORMAT(elf64-x86-64)
+OUTPUT_ARCH(i386:x86-64)
+ENTRY(_start)
 
 SECTIONS
 {
     . = 0x00100000;
 
-    /* Multiboot header MUST be at the very beginning of .text */
+    /* Entry point MUST be first (FreeBSD-style) */
     .text : ALIGN(4K) {
-        *(.text.multiboot_header)
+        KEEP(*(.text.entry))
         *(.text .text.*)
     }
 
