@@ -1,0 +1,16 @@
+[package]
+name = "guardfs"
+version = "1.0.0"
+edition = "2021"
+authors = ["Cartesian School - Siergej Sobolewski"]
+license = "BSD-3-Clause"
+
+[dependencies]
+gbsd = { path = "../../userland/libgbsd" }
+kernel_log = { path = "../../kernel/log" }
+
+[profile.release]
+opt-level = 2
+lto = true
+panic = "abort"
+

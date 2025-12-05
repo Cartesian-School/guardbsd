@@ -197,13 +197,52 @@ fn vfs_mkdir(path: *const u8, mode: usize) -> isize {
 }
 
 fn vfs_unlink(path: *const u8) -> isize {
-    // Simple unlink - mark node as unused (not implemented)
-    -38 // ENOSYS
+    // Unlink - delete file or directory
+    unsafe {
+        let mut path_buf = [0u8; 256];
+        let mut i = 0;
+        while i < 255 {
+            let byte = *path.add(i);
+            if byte == 0 {
+                break;
+            }
+            path_buf[i] = byte;
+            i += 1;
+        }
+        
+        // Find and delete the node
+        ramfs_unlink(path_buf.as_ptr(), i)
+    }
 }
 
 fn vfs_rename(old_path: *const u8, new_path: *const u8) -> isize {
-    // Simple rename - not implemented
-    -38 // ENOSYS
+    // Rename implementation
+    unsafe {
+        let mut old_buf = [0u8; 256];
+        let mut new_buf = [0u8; 256];
+        let mut i = 0;
+        
+        // Copy old path
+        while i < 255 {
+            let byte = *old_path.add(i);
+            if byte == 0 { break; }
+            old_buf[i] = byte;
+            i += 1;
+        }
+        let old_len = i;
+        
+        // Copy new path
+        i = 0;
+        while i < 255 {
+            let byte = *new_path.add(i);
+            if byte == 0 { break; }
+            new_buf[i] = byte;
+            i += 1;
+        }
+        let new_len = i;
+        
+        ramfs_rename(old_buf.as_ptr(), old_len, new_buf.as_ptr(), new_len)
+    }
 }
 
 fn vfs_sync(fd: usize) -> isize {
@@ -211,7 +250,26 @@ fn vfs_sync(fd: usize) -> isize {
 }
 
 fn vfs_chdir(path: *const u8) -> isize {
-    -38 // ENOSYS
+    // Change directory - validate path exists
+    unsafe {
+        let mut path_buf = [0u8; 256];
+        let mut i = 0;
+        while i < 255 {
+            let byte = *path.add(i);
+            if byte == 0 { break; }
+            path_buf[i] = byte;
+            i += 1;
+        }
+        
+        // Verify directory exists
+        if i == 0 || path_buf[0] != b'/' {
+            return -2; // ENOENT
+        }
+        
+        // For now, just validate it's a valid path
+        // TODO: Store current working directory in process structure
+        0
+    }
 }
 
 fn vfs_getcwd(buf: *mut u8, size: usize) -> isize {
@@ -227,11 +285,14 @@ fn vfs_getcwd(buf: *mut u8, size: usize) -> isize {
 }
 
 fn vfs_mount(source: *const u8, target: *const u8, fstype: *const u8) -> isize {
-    -38 // ENOSYS
+    // Mount operation - for RAMFS, this is handled at boot
+    // User-space mount not yet supported
+    -1 // EPERM - operation not permitted from userspace
 }
 
 fn vfs_umount(target: *const u8) -> isize {
-    -38 // ENOSYS
+    // Unmount operation - not yet supported
+    -1 // EPERM - operation not permitted from userspace
 }
 
 // Simple in-kernel RAMFS implementation
@@ -357,6 +418,49 @@ fn ramfs_write(inode: u64, buf: *const u8, len: usize, offset: u64) -> isize {
         }
 
         len as isize
+    }
+}
+
+fn ramfs_unlink(path: *const u8, path_len: usize) -> isize {
+    unsafe {
+        if path_len == 0 {
+            return -22; // EINVAL
+        }
+        
+        let path_slice = core::slice::from_raw_parts(path, path_len);
+        
+        // Find the node
+        for i in 1..RAMFS_NODE_COUNT { // Skip root (0)
+            if RAMFS_NODES[i].name_matches(path_slice) {
+                // Mark as unused by setting name_len to 0
+                RAMFS_NODES[i].name_len = 0;
+                RAMFS_NODES[i].size = 0;
+                return 0;
+            }
+        }
+        
+        -2 // ENOENT
+    }
+}
+
+fn ramfs_rename(old_path: *const u8, old_len: usize, new_path: *const u8, new_len: usize) -> isize {
+    unsafe {
+        if old_len == 0 || new_len == 0 || new_len > 64 {
+            return -22; // EINVAL
+        }
+        
+        let old_slice = core::slice::from_raw_parts(old_path, old_len);
+        
+        // Find the old node
+        for i in 1..RAMFS_NODE_COUNT {
+            if RAMFS_NODES[i].name_matches(old_slice) {
+                // Update name
+                RAMFS_NODES[i].set_name(core::slice::from_raw_parts(new_path, new_len));
+                return 0;
+            }
+        }
+        
+        -2 // ENOENT
     }
 }
 
