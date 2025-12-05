@@ -13,7 +13,7 @@ use core::panic::PanicInfo;
 mod syscalls {
     // Import canonical syscall numbers from shared module
     include!("../../../shared/syscall_numbers.rs");
-    
+
     // Compatibility aliases for this module
     pub const GBSD_SYS_PORT_CREATE: u64 = SYS_IPC_PORT_CREATE as u64;
     pub const GBSD_SYS_EXIT: u64 = SYS_EXIT as u64;

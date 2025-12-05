@@ -4,7 +4,7 @@
 #![no_std]
 #![no_main]
 
-use gbsd::{exit, exec, getpid, write};
+use gbsd::{exec, exit, getpid, write};
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {

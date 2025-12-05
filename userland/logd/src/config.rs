@@ -135,7 +135,10 @@ impl LogdConfig {
     pub fn should_log(&self, level: LogLevel) -> bool {
         match self.level {
             LogLevel::Trace => true,
-            LogLevel::Debug => matches!(level, LogLevel::Debug | LogLevel::Info | LogLevel::Warn | LogLevel::Error),
+            LogLevel::Debug => matches!(
+                level,
+                LogLevel::Debug | LogLevel::Info | LogLevel::Warn | LogLevel::Error
+            ),
             LogLevel::Info => matches!(level, LogLevel::Info | LogLevel::Warn | LogLevel::Error),
             LogLevel::Warn => matches!(level, LogLevel::Warn | LogLevel::Error),
             LogLevel::Error => matches!(level, LogLevel::Error),
@@ -145,7 +148,11 @@ impl LogdConfig {
 
 fn trim_spaces(s: &[u8]) -> &[u8] {
     let start = s.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(0);
-    let end = s.iter().rposition(|&b| b != b' ' && b != b'\t').map(|i| i + 1).unwrap_or(s.len());
+    let end = s
+        .iter()
+        .rposition(|&b| b != b' ' && b != b'\t')
+        .map(|i| i + 1)
+        .unwrap_or(s.len());
     &s[start..end]
 }
 

@@ -34,14 +34,14 @@ impl Console {
 
     pub fn read(&mut self, buf: &mut [u8]) -> usize {
         let mut count = 0;
-        
+
         // Read from buffer
         while count < buf.len() && self.rx_head != self.rx_tail {
             buf[count] = self.rx_buf[self.rx_tail];
             self.rx_tail = (self.rx_tail + 1) % 256;
             count += 1;
         }
-        
+
         // Try to read from UART
         while count < buf.len() {
             if let Some(byte) = self.uart.read_byte() {
@@ -51,7 +51,7 @@ impl Console {
                 break;
             }
         }
-        
+
         count
     }
 

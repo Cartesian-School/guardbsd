@@ -12,9 +12,9 @@ pub const BP_SIZE: usize = 128;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct DeviceAddress {
-    pub vdev_id: u32,         // Which virtual device
-    pub offset: u64,          // Block offset on that device
-    pub asize: u32,           // Allocated size
+    pub vdev_id: u32, // Which virtual device
+    pub offset: u64,  // Block offset on that device
+    pub asize: u32,   // Allocated size
 }
 
 impl DeviceAddress {
@@ -25,7 +25,7 @@ impl DeviceAddress {
             asize: 0,
         }
     }
-    
+
     pub fn is_valid(&self) -> bool {
         self.offset != 0
     }
@@ -38,26 +38,26 @@ impl DeviceAddress {
 pub struct BlockPointer {
     // Physical locations (up to 3 copies for ditto blocks)
     pub dva: [DeviceAddress; 3],
-    
+
     // Sizes
-    pub lsize: u32,           // Logical size (uncompressed)
-    pub psize: u32,           // Physical size (compressed)
-    
+    pub lsize: u32, // Logical size (uncompressed)
+    pub psize: u32, // Physical size (compressed)
+
     // Checksum (SHA-256)
     pub checksum: [u8; 32],
-    pub checksum_type: u8,    // 0 = none, 1 = SHA256
-    
+    pub checksum_type: u8, // 0 = none, 1 = SHA256
+
     // Compression
-    pub comp_algo: u8,        // 0 = none, 1 = LZ4
-    
+    pub comp_algo: u8, // 0 = none, 1 = LZ4
+
     // Metadata
-    pub level: u8,            // Indirection level (0 = data, 1+ = indirect)
-    pub object_type: u8,      // File, directory, etc.
-    
+    pub level: u8,       // Indirection level (0 = data, 1+ = indirect)
+    pub object_type: u8, // File, directory, etc.
+
     // Transaction info
-    pub birth_txg: u64,       // Transaction group when created
-    pub fill_count: u64,      // Number of non-zero blocks below
-    
+    pub birth_txg: u64,  // Transaction group when created
+    pub fill_count: u64, // Number of non-zero blocks below
+
     // Padding to 128 bytes
     pub padding: [u8; 16],
 }
@@ -78,38 +78,38 @@ impl BlockPointer {
             padding: [0; 16],
         }
     }
-    
+
     pub fn new(vdev_id: u32, offset: u64, data: &[u8]) -> Self {
         let mut bp = Self::empty();
-        
+
         bp.dva[0] = DeviceAddress {
             vdev_id,
             offset,
             asize: data.len() as u32,
         };
-        
+
         bp.lsize = data.len() as u32;
         bp.psize = data.len() as u32;
         bp.checksum_type = 1; // SHA-256
         bp.checksum = sha256(data);
         bp.birth_txg = 1; // TODO: Get current TXG
-        
+
         bp
     }
-    
+
     pub fn is_valid(&self) -> bool {
         self.dva[0].is_valid()
     }
-    
+
     pub fn verify(&self, data: &[u8]) -> bool {
         if self.checksum_type == 0 {
             return true; // No checksum
         }
-        
+
         let computed = sha256(data);
         computed == self.checksum
     }
-    
+
     pub fn is_hole(&self) -> bool {
         self.lsize == 0
     }
@@ -126,16 +126,13 @@ impl IndirectBlock {
             pointers: [BlockPointer::empty(); 32],
         }
     }
-    
+
     pub fn to_bytes(&self) -> &[u8] {
         unsafe {
-            core::slice::from_raw_parts(
-                self as *const _ as *const u8,
-                core::mem::size_of::<Self>()
-            )
+            core::slice::from_raw_parts(self as *const _ as *const u8, core::mem::size_of::<Self>())
         }
     }
-    
+
     pub fn from_bytes(data: &[u8]) -> Self {
         let mut ib = Self::new();
         if data.len() >= core::mem::size_of::<Self>() {
@@ -143,11 +140,10 @@ impl IndirectBlock {
                 core::ptr::copy_nonoverlapping(
                     data.as_ptr(),
                     &mut ib as *mut _ as *mut u8,
-                    core::mem::size_of::<Self>()
+                    core::mem::size_of::<Self>(),
                 );
             }
         }
         ib
     }
 }
-

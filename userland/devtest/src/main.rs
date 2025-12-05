@@ -23,10 +23,10 @@ fn test_device() -> ! {
                 Ok(_) => {
                     // Test 3: Close device
                     let _ = dev_close(dev_id);
-                    
+
                     // Test 4: Unregister device
                     let _ = dev_unregister(dev_id);
-                    
+
                     exit(0); // Success
                 }
                 Err(_) => exit(2),

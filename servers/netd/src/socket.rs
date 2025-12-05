@@ -4,14 +4,14 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use crate::tcp::TcpConnection;
 use crate::ip::IpAddr;
+use crate::tcp::TcpConnection;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SocketType {
-    Stream,  // TCP
-    Dgram,   // UDP
-    Raw,     // Raw IP
+    Stream, // TCP
+    Dgram,  // UDP
+    Raw,    // Raw IP
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

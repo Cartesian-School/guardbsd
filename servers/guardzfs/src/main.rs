@@ -23,38 +23,44 @@ macro_rules! println {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     println!("GuardZFS: Starting ZFS-inspired filesystem server...");
-    
+
     // Create IPC port
     let port = port_create();
     if port == 0 {
         println!("GuardZFS: Failed to create IPC port");
         exit(1);
     }
-    
+
     println!("GuardZFS: Listening on port {}", port);
-    
+
     // Initialize storage pool
     // TODO: Detect disks and create pool
-    
+
     let mut guardzfs = guardzfs::GuardZfs::new();
-    
+
     loop {
         let mut req_buf = [0u8; 4096];
         let mut resp_buf = [0u8; 4096];
-        
+
         // Wait for VFS requests
         let _len = port_receive(port, req_buf.as_mut_ptr(), req_buf.len());
-        
+
         // Parse operation
         let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
         let reply_port = u64::from_le_bytes([
-            req_buf[4], req_buf[5], req_buf[6], req_buf[7],
-            req_buf[8], req_buf[9], req_buf[10], req_buf[11]
+            req_buf[4],
+            req_buf[5],
+            req_buf[6],
+            req_buf[7],
+            req_buf[8],
+            req_buf[9],
+            req_buf[10],
+            req_buf[11],
         ]);
-        
+
         // Handle request
         let result = handle_request(op, &req_buf[12..], &mut guardzfs);
-        
+
         // Send response
         resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
         let _ = port_send(reply_port, resp_buf.as_ptr(), resp_buf.len());
@@ -90,4 +96,3 @@ fn handle_request(op: u32, _data: &[u8], _zfs: &mut guardzfs::GuardZfs) -> i64 {
         _ => -38, // ENOSYS
     }
 }
-

@@ -43,7 +43,8 @@ mod ipc_integration_tests {
 
         fn receive_message(&self, port: PortId) -> Option<MessageId> {
             let mut messages = self.messages.lock().unwrap();
-            messages.iter()
+            messages
+                .iter()
                 .position(|(p, _)| *p == port)
                 .map(|idx| messages.remove(idx).1)
         }
@@ -60,10 +61,10 @@ mod ipc_integration_tests {
     #[test]
     fn test_port_lifecycle() {
         let system = MockIpcSystem::new();
-        
+
         let port1 = system.create_port();
         let port2 = system.create_port();
-        
+
         assert_eq!(system.port_count(), 2);
         assert_ne!(port1, port2);
     }
@@ -73,10 +74,10 @@ mod ipc_integration_tests {
         let system = MockIpcSystem::new();
         let port = system.create_port();
         let msg = MessageId(42);
-        
+
         assert!(system.send_message(port, msg));
         assert_eq!(system.message_count(), 1);
-        
+
         let received = system.receive_message(port);
         assert_eq!(received, Some(msg));
         assert_eq!(system.message_count(), 0);
@@ -86,7 +87,7 @@ mod ipc_integration_tests {
     fn test_concurrent_port_creation() {
         let system = Arc::new(MockIpcSystem::new());
         let mut handles = vec![];
-        
+
         for _ in 0..10 {
             let sys = Arc::clone(&system);
             let handle = thread::spawn(move || {
@@ -94,11 +95,11 @@ mod ipc_integration_tests {
             });
             handles.push(handle);
         }
-        
+
         for handle in handles {
             handle.join().unwrap();
         }
-        
+
         assert_eq!(system.port_count(), 10);
     }
 
@@ -107,7 +108,7 @@ mod ipc_integration_tests {
         let system = Arc::new(MockIpcSystem::new());
         let port = system.create_port();
         let mut handles = vec![];
-        
+
         for i in 0..5 {
             let sys = Arc::clone(&system);
             let handle = thread::spawn(move || {
@@ -115,11 +116,11 @@ mod ipc_integration_tests {
             });
             handles.push(handle);
         }
-        
+
         for handle in handles {
             handle.join().unwrap();
         }
-        
+
         assert_eq!(system.message_count(), 5);
     }
 
@@ -127,11 +128,11 @@ mod ipc_integration_tests {
     fn test_message_ordering() {
         let system = MockIpcSystem::new();
         let port = system.create_port();
-        
+
         system.send_message(port, MessageId(1));
         system.send_message(port, MessageId(2));
         system.send_message(port, MessageId(3));
-        
+
         assert_eq!(system.receive_message(port), Some(MessageId(1)));
         assert_eq!(system.receive_message(port), Some(MessageId(2)));
         assert_eq!(system.receive_message(port), Some(MessageId(3)));
@@ -141,7 +142,7 @@ mod ipc_integration_tests {
     fn test_empty_port_receive() {
         let system = MockIpcSystem::new();
         let port = system.create_port();
-        
+
         assert_eq!(system.receive_message(port), None);
     }
 
@@ -150,10 +151,10 @@ mod ipc_integration_tests {
         let system = MockIpcSystem::new();
         let port1 = system.create_port();
         let port2 = system.create_port();
-        
+
         system.send_message(port1, MessageId(100));
         system.send_message(port2, MessageId(200));
-        
+
         assert_eq!(system.receive_message(port1), Some(MessageId(100)));
         assert_eq!(system.receive_message(port2), Some(MessageId(200)));
     }
@@ -162,17 +163,17 @@ mod ipc_integration_tests {
     fn test_high_volume_messaging() {
         let system = MockIpcSystem::new();
         let port = system.create_port();
-        
+
         for i in 0..100 {
             system.send_message(port, MessageId(i));
         }
-        
+
         assert_eq!(system.message_count(), 100);
-        
+
         for i in 0..100 {
             assert_eq!(system.receive_message(port), Some(MessageId(i)));
         }
-        
+
         assert_eq!(system.message_count(), 0);
     }
 
@@ -180,7 +181,7 @@ mod ipc_integration_tests {
     fn test_producer_consumer() {
         let system = Arc::new(MockIpcSystem::new());
         let port = system.create_port();
-        
+
         let producer_sys = Arc::clone(&system);
         let producer = thread::spawn(move || {
             for i in 0..10 {
@@ -188,9 +189,9 @@ mod ipc_integration_tests {
                 thread::sleep(Duration::from_millis(1));
             }
         });
-        
+
         thread::sleep(Duration::from_millis(50));
-        
+
         let consumer_sys = Arc::clone(&system);
         let consumer = thread::spawn(move || {
             let mut count = 0;
@@ -202,21 +203,21 @@ mod ipc_integration_tests {
             }
             count
         });
-        
+
         producer.join().unwrap();
         let received = consumer.join().unwrap();
-        
+
         assert_eq!(received, 10);
     }
 
     #[test]
     fn test_stress_port_creation() {
         let system = MockIpcSystem::new();
-        
+
         for _ in 0..1000 {
             system.create_port();
         }
-        
+
         assert_eq!(system.port_count(), 1000);
     }
 }

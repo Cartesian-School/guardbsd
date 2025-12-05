@@ -48,4 +48,3 @@ pub mod syscall_numbers {
     pub const SYS_SIGPROCMASK: usize = 53;
     pub const SYS_SIGRETURN: usize = 54;
 }
-

@@ -69,7 +69,8 @@ impl VnodeTable {
     }
 
     pub fn get(&mut self, id: u64) -> Option<&mut Vnode> {
-        self.vnodes.iter_mut()
+        self.vnodes
+            .iter_mut()
             .find_map(|slot| slot.as_mut().filter(|v| v.vnode_id == id))
     }
 

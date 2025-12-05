@@ -77,7 +77,7 @@ impl TcpSegment {
         let seq = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]);
         let ack = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
         let flags = buf[13];
-        
+
         let header_len = ((buf[12] >> 4) * 4) as usize;
         let data_len = buf.len().saturating_sub(header_len).min(1460);
 

@@ -25,7 +25,7 @@ pub const PART_TYPE_FAT32: u8 = 0x0B;
 pub const PART_TYPE_FAT32_LBA: u8 = 0x0C;
 pub const PART_TYPE_FAT16_LBA: u8 = 0x0E;
 pub const PART_TYPE_EXTENDED_LBA: u8 = 0x0F;
-pub const PART_TYPE_LINUX_SWAP: u8 = 0x82;  // *** SWAP PARTITION ***
+pub const PART_TYPE_LINUX_SWAP: u8 = 0x82; // *** SWAP PARTITION ***
 pub const PART_TYPE_LINUX: u8 = 0x83;
 pub const PART_TYPE_LINUX_EXTENDED: u8 = 0x85;
 pub const PART_TYPE_LVM: u8 = 0x8E;
@@ -59,25 +59,25 @@ impl MbrPartition {
             size_sectors: 0,
         }
     }
-    
+
     pub fn is_valid(&self) -> bool {
         self.partition_type != PART_TYPE_EMPTY && self.size_sectors > 0
     }
-    
+
     pub fn is_bootable(&self) -> bool {
         self.bootable == 0x80
     }
-    
+
     pub fn is_swap(&self) -> bool {
         self.partition_type == PART_TYPE_LINUX_SWAP
     }
-    
+
     pub fn is_extended(&self) -> bool {
-        self.partition_type == PART_TYPE_EXTENDED 
+        self.partition_type == PART_TYPE_EXTENDED
             || self.partition_type == PART_TYPE_EXTENDED_LBA
             || self.partition_type == PART_TYPE_LINUX_EXTENDED
     }
-    
+
     pub fn get_type_name(&self) -> &'static str {
         match self.partition_type {
             PART_TYPE_EMPTY => "Empty",
@@ -104,7 +104,7 @@ impl MbrPartition {
             _ => "Unknown",
         }
     }
-    
+
     pub fn get_size_mb(&self) -> u64 {
         (self.size_sectors as u64 * 512) / (1024 * 1024)
     }
@@ -121,22 +121,22 @@ impl Mbr {
         if data.len() < 512 {
             return None;
         }
-        
+
         // Check signature
         let signature = u16::from_le_bytes([data[510], data[511]]);
         if signature != MBR_SIGNATURE {
             return None;
         }
-        
+
         let mut mbr = Mbr {
             bootstrap: [0; 446],
             partitions: [MbrPartition::empty(); 4],
             signature,
         };
-        
+
         // Copy bootstrap code
         mbr.bootstrap.copy_from_slice(&data[0..446]);
-        
+
         // Parse partition table
         for i in 0..4 {
             let offset = MBR_PARTITION_TABLE_OFFSET + i * 16;
@@ -159,10 +159,10 @@ impl Mbr {
                 ]),
             };
         }
-        
+
         Some(mbr)
     }
-    
+
     pub fn is_gpt_protective(&self) -> bool {
         self.partitions[0].partition_type == PART_TYPE_GPT
     }
@@ -195,7 +195,7 @@ impl GptHeader {
         if data.len() < 92 {
             return None;
         }
-        
+
         let mut header = GptHeader {
             signature: [0; 8],
             revision: 0,
@@ -212,28 +212,28 @@ impl GptHeader {
             partition_entry_size: 0,
             partition_array_crc32: 0,
         };
-        
+
         header.signature.copy_from_slice(&data[0..8]);
-        
+
         if &header.signature != GPT_SIGNATURE {
             return None;
         }
-        
+
         header.revision = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
         header.header_size = u32::from_le_bytes([data[12], data[13], data[14], data[15]]);
         // Parse remaining fields...
-        
+
         Some(header)
     }
 }
 
 pub fn detect_partitions(_device: &BlockDevice) -> Result<usize, DiskError> {
     let sector = [0u8; SECTOR_SIZE];
-    
+
     // Read MBR (LBA 0)
     // In real implementation, would call device.read_sectors(0, 1, &mut sector)
     // For now, return placeholder
-    
+
     if let Some(mbr) = Mbr::from_bytes(&sector) {
         if mbr.is_gpt_protective() {
             // Read GPT header (LBA 1)
@@ -245,18 +245,18 @@ pub fn detect_partitions(_device: &BlockDevice) -> Result<usize, DiskError> {
             for part in &mbr.partitions {
                 if part.is_valid() {
                     count += 1;
-                    
+
                     // Check if this is a swap partition
                     if part.is_swap() {
                         // Register as swap space
                         let swap = crate::swap::SwapSpace::new(
                             _device.id,
                             part.start_lba as u64,
-                            part.size_sectors as u64
+                            part.size_sectors as u64,
                         );
                         let _ = crate::swap::register_swap(swap);
                     }
-                    
+
                     // Create logical block device for this partition
                     // Register partition device
                 }
@@ -264,7 +264,6 @@ pub fn detect_partitions(_device: &BlockDevice) -> Result<usize, DiskError> {
             return Ok(count);
         }
     }
-    
+
     Err(DiskError::ReadError)
 }
-

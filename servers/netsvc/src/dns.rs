@@ -58,8 +58,7 @@ impl DnsCache {
     pub fn lookup(&self, name: &[u8]) -> Option<&DnsResponse> {
         for entry in &self.entries {
             if let Some((query, response)) = entry {
-                if query.name_len == name.len() 
-                    && &query.name[..query.name_len] == name {
+                if query.name_len == name.len() && &query.name[..query.name_len] == name {
                     return Some(response);
                 }
             }

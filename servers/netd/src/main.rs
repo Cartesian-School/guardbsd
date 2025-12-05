@@ -9,14 +9,14 @@
 
 use gbsd::*;
 
+mod icmp;
 mod ip;
+mod socket;
 mod tcp;
 mod udp;
-mod icmp;
-mod socket;
 
-use socket::{SocketTable, SocketType};
 use ip::IpAddr;
+use socket::{SocketTable, SocketType};
 
 static mut SOCKET_TABLE: SocketTable = SocketTable::new();
 
@@ -55,7 +55,7 @@ fn netd_main() -> ! {
             if req_buf.len() >= 4 {
                 let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
                 let result = handle_request(op, &req_buf[4..], &mut resp_buf[8..]);
-                
+
                 resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
                 let _ = port_send(port, resp_buf.as_ptr(), resp_buf.len());
             }

@@ -117,9 +117,17 @@ impl VfsResponse {
 }
 
 // VFS operation processing - routes to appropriate filesystem servers
-pub fn process_vfs_request(req: &VfsRequest, mounts: &mut crate::MountTable, vfs_port: usize) -> VfsResponse {
+pub fn process_vfs_request(
+    req: &VfsRequest,
+    mounts: &mut crate::MountTable,
+    vfs_port: usize,
+) -> VfsResponse {
     // Extract path string safely
-    let path_len = req.path.iter().position(|&c| c == 0).unwrap_or(req.path.len());
+    let path_len = req
+        .path
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(req.path.len());
     let path = core::str::from_utf8(&req.path[..path_len]).unwrap_or("<invalid>");
 
     // Find the appropriate mount point
@@ -154,13 +162,17 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
 
     // Copy operation code
     ipc_buf[0..4].copy_from_slice(&(req.op as u32).to_le_bytes());
-    
+
     // Copy reply-to port (VFS port where RAMFS should send response)
     ipc_buf[4..8].copy_from_slice(&(vfs_port as u32).to_le_bytes());
 
     // Copy path
-    let path_len = req.path.iter().position(|&c| c == 0).unwrap_or(req.path.len());
-    ipc_buf[8..8+path_len].copy_from_slice(&req.path[..path_len]);
+    let path_len = req
+        .path
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(req.path.len());
+    ipc_buf[8..8 + path_len].copy_from_slice(&req.path[..path_len]);
 
     // Copy flags and mode if needed
     ipc_buf[256..260].copy_from_slice(&req.flags.to_le_bytes());
@@ -173,8 +185,14 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
         if port_receive(vfs_port as u64, resp_buf.as_mut_ptr(), 512).is_ok() {
             // Parse response
             let result = i64::from_le_bytes([
-                resp_buf[0], resp_buf[1], resp_buf[2], resp_buf[3],
-                resp_buf[4], resp_buf[5], resp_buf[6], resp_buf[7]
+                resp_buf[0],
+                resp_buf[1],
+                resp_buf[2],
+                resp_buf[3],
+                resp_buf[4],
+                resp_buf[5],
+                resp_buf[6],
+                resp_buf[7],
             ]);
 
             if result >= 0 {

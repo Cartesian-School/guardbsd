@@ -8,19 +8,19 @@
 #![no_main]
 
 mod builtins;
+mod completion;
+mod env;
 mod exec;
 mod io;
+mod jobs;
 mod parser;
-mod env;
-mod completion;
 mod redirect;
 mod spawn;
-mod jobs;
 
-use gbsd::*;
-use crate::env::*;
 use crate::completion::Completer;
+use crate::env::*;
 use crate::jobs::JobControl;
+use gbsd::*;
 
 const MAX_LINE: usize = 256;
 const MAX_HISTORY: usize = 100;
@@ -30,8 +30,8 @@ struct Shell {
     history_count: usize,
     history_index: usize, // Current position in history (-1 means not navigating)
     current_line: [u8; MAX_LINE],
-    line_pos: usize,      // Current cursor position in line
-    line_len: usize,      // Total length of current line
+    line_pos: usize, // Current cursor position in line
+    line_len: usize, // Total length of current line
     prompt: &'static [u8],
     env: Environment,
     completer: Completer,
@@ -89,7 +89,8 @@ impl Shell {
                             self.line_len = self.line_pos;
                             return true;
                         }
-                        127 | 8 => { // Backspace
+                        127 | 8 => {
+                            // Backspace
                             if self.line_pos > 0 {
                                 self.line_pos -= 1;
                                 // Shift characters left
@@ -105,20 +106,24 @@ impl Shell {
                                 self.redisplay_line();
                             }
                         }
-                        27 => { // ESC - start of escape sequence
+                        27 => {
+                            // ESC - start of escape sequence
                             if self.handle_escape_sequence() {
                                 return true;
                             }
                         }
-                        1 => { // Ctrl+A - beginning of line
+                        1 => {
+                            // Ctrl+A - beginning of line
                             self.line_pos = 0;
                             self.move_cursor();
                         }
-                        5 => { // Ctrl+E - end of line
+                        5 => {
+                            // Ctrl+E - end of line
                             self.line_pos = self.line_len;
                             self.move_cursor();
                         }
-                        3 => { // Ctrl+C
+                        3 => {
+                            // Ctrl+C
                             let _ = println(b"^C");
                             self.line_pos = 0;
                             self.line_len = 0;
@@ -126,15 +131,21 @@ impl Shell {
                             self.history_index = usize::MAX;
                             break;
                         }
-                        4 => { // Ctrl+D (EOF)
+                        4 => {
+                            // Ctrl+D (EOF)
                             let _ = println(b"");
                             return false;
                         }
-                        9 => { // Tab - completion
+                        9 => {
+                            // Tab - completion
                             self.handle_tab_completion();
                         }
                         _ => {
-                            if self.line_pos < MAX_LINE - 1 && self.line_len < MAX_LINE - 1 && c >= 32 && c <= 126 {
+                            if self.line_pos < MAX_LINE - 1
+                                && self.line_len < MAX_LINE - 1
+                                && c >= 32
+                                && c <= 126
+                            {
                                 // Insert character at cursor position
                                 for i in (self.line_pos..self.line_len + 1).rev() {
                                     if i + 1 < MAX_LINE {
@@ -198,15 +209,17 @@ impl Shell {
         // Check for arrow keys: ESC [ A (up), ESC [ B (down)
         if seq[0] == b'[' {
             match seq[1] {
-                b'A' => { // Up arrow - previous history
+                b'A' => {
+                    // Up arrow - previous history
                     self.navigate_history(true);
                     true
                 }
-                b'B' => { // Down arrow - next history
+                b'B' => {
+                    // Down arrow - next history
                     self.navigate_history(false);
                     true
                 }
-                _ => false
+                _ => false,
             }
         } else {
             false
@@ -269,24 +282,30 @@ impl Shell {
 
     fn handle_tab_completion(&mut self) {
         // Find completion for current line
-        if let Some(completion) = self.completer.complete(&self.current_line[..self.line_len], self.line_pos) {
+        if let Some(completion) = self
+            .completer
+            .complete(&self.current_line[..self.line_len], self.line_pos)
+        {
             // Find word start
             let mut word_start = self.line_pos;
-            while word_start > 0 && self.current_line[word_start - 1] != b' ' && self.current_line[word_start - 1] != b'\t' {
+            while word_start > 0
+                && self.current_line[word_start - 1] != b' '
+                && self.current_line[word_start - 1] != b'\t'
+            {
                 word_start -= 1;
             }
-            
+
             // Replace from word_start to cursor with completion
             let comp_len = completion.len();
             if word_start + comp_len < MAX_LINE {
                 // Clear old word
                 self.line_len = word_start;
-                
+
                 // Insert completion
                 self.current_line[word_start..word_start + comp_len].copy_from_slice(completion);
                 self.line_len = word_start + comp_len;
                 self.line_pos = self.line_len;
-                
+
                 // Redisplay
                 self.clear_line();
                 let _ = gbsd::write(1, b"\r");
@@ -325,7 +344,9 @@ impl Shell {
 
         // Expand variables
         let mut expanded_line = [0u8; MAX_LINE];
-        let expanded_len = self.env.expand_variables(&self.current_line[..self.line_len], &mut expanded_line);
+        let expanded_len = self
+            .env
+            .expand_variables(&self.current_line[..self.line_len], &mut expanded_line);
 
         // Check for pipes
         let pipeline = redirect::Pipeline::parse(&expanded_line[..expanded_len]);
@@ -337,7 +358,7 @@ impl Shell {
 
         // Parse redirections
         let (redirect_opt, cmd_part) = redirect::Redirect::parse(&expanded_line[..expanded_len]);
-        
+
         // Parse command
         if let Some(cmd) = parser::Command::parse(cmd_part) {
             // Apply redirections
@@ -346,7 +367,7 @@ impl Shell {
             if let Some(ref redir) = redirect_opt {
                 let _ = redir.apply(&mut saved_stdout, &mut saved_stdin);
             }
-            
+
             // Execute command
             if cmd.background {
                 // Background job
@@ -355,9 +376,15 @@ impl Shell {
                     self.jobs.add_job(pid, cmd_part, true);
                 }
             } else {
-                let _ = exec::execute(&cmd, &mut self.env, &self.history, self.history_count, &mut self.jobs);
+                let _ = exec::execute(
+                    &cmd,
+                    &mut self.env,
+                    &self.history,
+                    self.history_count,
+                    &mut self.jobs,
+                );
             }
-            
+
             // Restore redirections
             if redirect_opt.is_some() {
                 let _ = redirect::Redirect::restore(saved_stdout, saved_stdin);

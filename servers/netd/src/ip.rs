@@ -13,7 +13,9 @@ pub struct IpAddr {
 
 impl IpAddr {
     pub const fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
-        Self { octets: [a, b, c, d] }
+        Self {
+            octets: [a, b, c, d],
+        }
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
@@ -29,7 +31,11 @@ impl IpAddr {
 
 impl fmt::Display for IpAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{}.{}", self.octets[0], self.octets[1], self.octets[2], self.octets[3])
+        write!(
+            f,
+            "{}.{}.{}.{}",
+            self.octets[0], self.octets[1], self.octets[2], self.octets[3]
+        )
     }
 }
 
@@ -65,7 +71,7 @@ impl IpPacket {
         let protocol = buf[9];
         let src = IpAddr::from_bytes(&buf[12..16]);
         let dst = IpAddr::from_bytes(&buf[16..20]);
-        
+
         let total_len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
         let header_len = ((buf[0] & 0x0F) * 4) as usize;
         let data_len = total_len.saturating_sub(header_len).min(1500);
@@ -75,7 +81,7 @@ impl IpPacket {
         packet.dst = dst;
         packet.protocol = protocol;
         packet.len = data_len;
-        
+
         if buf.len() >= header_len + data_len {
             packet.data[..data_len].copy_from_slice(&buf[header_len..header_len + data_len]);
         }

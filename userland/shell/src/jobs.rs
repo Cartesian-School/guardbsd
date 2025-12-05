@@ -49,27 +49,31 @@ impl JobControl {
             foreground_job: None,
         }
     }
-    
+
     /// Add a new job (background or suspended)
     pub fn add_job(&mut self, pid: i32, command: &[u8], background: bool) -> usize {
         let job_id = self.next_job_id;
         self.next_job_id += 1;
-        
+
         let mut job = Job::new();
         job.id = job_id;
         job.pid = pid;
-        job.state = if background { JobState::Running } else { JobState::Stopped };
-        
+        job.state = if background {
+            JobState::Running
+        } else {
+            JobState::Stopped
+        };
+
         let len = command.len().min(255);
         job.command[..len].copy_from_slice(&command[..len]);
         job.cmd_len = len;
-        
+
         // Find empty slot
         for i in 0..32 {
             if self.jobs[i].is_none() {
                 self.jobs[i] = Some(job);
                 self.job_count += 1;
-                
+
                 if background {
                     let _ = crate::io::print(b"[");
                     let _ = self.print_number(job_id);
@@ -77,14 +81,14 @@ impl JobControl {
                     let _ = self.print_number(pid as usize);
                     let _ = crate::io::println(b"");
                 }
-                
+
                 return job_id;
             }
         }
-        
+
         0 // No space
     }
-    
+
     /// List all jobs
     pub fn list_jobs(&self) -> Result<()> {
         for job_opt in &self.jobs {
@@ -93,73 +97,79 @@ impl JobControl {
                 let _ = crate::io::print(b"[");
                 let _ = self.print_number(job.id);
                 let _ = crate::io::print(b"]");
-                
+
                 // Mark current/previous job
                 if self.foreground_job == Some(job.id) {
                     let _ = crate::io::print(b"+ ");
                 } else {
                     let _ = crate::io::print(b"  ");
                 }
-                
+
                 let _ = self.print_number(job.pid as usize);
                 let _ = crate::io::print(b" ");
-                
+
                 match job.state {
-                    JobState::Running => { let _ = crate::io::print(b"Running    "); }
-                    JobState::Stopped => { let _ = crate::io::print(b"Stopped    "); }
-                    JobState::Done => { let _ = crate::io::print(b"Done       "); }
+                    JobState::Running => {
+                        let _ = crate::io::print(b"Running    ");
+                    }
+                    JobState::Stopped => {
+                        let _ = crate::io::print(b"Stopped    ");
+                    }
+                    JobState::Done => {
+                        let _ = crate::io::print(b"Done       ");
+                    }
                 }
-                
+
                 let _ = crate::io::println(&job.command[..job.cmd_len]);
             }
         }
         Ok(())
     }
-    
+
     /// Bring job to foreground
     pub fn foreground(&mut self, job_id: usize) -> Result<()> {
         let job = self.find_job_mut(job_id).ok_or(Error::NotFound)?;
-        
+
         if job.state == JobState::Stopped {
             // Resume stopped job
             // TODO: Send SIGCONT to job.pid
             job.state = JobState::Running;
         }
-        
+
         self.foreground_job = Some(job_id);
         let pid = job.pid;
-        
+
         // Wait for job to complete
         let mut status = 0;
         gbsd::process::waitpid(pid, &mut status)?;
-        
+
         // Mark job as done
         if let Some(job) = self.find_job_mut(job_id) {
             job.state = JobState::Done;
         }
         self.foreground_job = None;
-        
+
         Ok(())
     }
-    
+
     /// Send job to background
     pub fn background(&mut self, job_id: usize) -> Result<()> {
         let job = self.find_job_mut(job_id).ok_or(Error::NotFound)?;
-        
+
         if job.state == JobState::Stopped {
             // Resume stopped job in background
             // TODO: Send SIGCONT to job.pid
             job.state = JobState::Running;
-            
+
             let _ = crate::io::print(b"[");
             let _ = self.print_number(job.id);
             let _ = crate::io::print(b"]+ ");
             let _ = crate::io::println(&job.command[..job.cmd_len]);
         }
-        
+
         Ok(())
     }
-    
+
     /// Check for completed jobs
     pub fn check_jobs(&mut self) {
         for i in 0..32 {
@@ -170,7 +180,7 @@ impl JobControl {
                     // TODO: waitpid with WNOHANG
                     if gbsd::process::waitpid(job.pid, &mut status).is_ok() {
                         job.state = JobState::Done;
-                        
+
                         let _ = crate::io::print(b"[");
                         let _ = self.print_number(job.id);
                         let _ = crate::io::print(b"]+ Done       ");
@@ -179,7 +189,7 @@ impl JobControl {
                 }
             }
         }
-        
+
         // Clean up done jobs
         for i in 0..32 {
             if let Some(ref job) = self.jobs[i] {
@@ -190,7 +200,7 @@ impl JobControl {
             }
         }
     }
-    
+
     fn find_job_mut(&mut self, job_id: usize) -> Option<&mut Job> {
         for job_opt in &mut self.jobs {
             if let Some(ref mut job) = job_opt {
@@ -201,28 +211,27 @@ impl JobControl {
         }
         None
     }
-    
+
     fn print_number(&self, mut num: usize) -> Result<()> {
         if num == 0 {
             return crate::io::print(b"0");
         }
-        
+
         let mut buf = [0u8; 10];
         let mut pos = 0;
-        
+
         while num > 0 {
             buf[pos] = b'0' + (num % 10) as u8;
             num /= 10;
             pos += 1;
         }
-        
+
         // Print in reverse
         while pos > 0 {
             pos -= 1;
             let _ = crate::io::print(&[buf[pos]]);
         }
-        
+
         Ok(())
     }
 }
-

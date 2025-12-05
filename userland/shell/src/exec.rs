@@ -4,19 +4,25 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use gbsd::*;
-use crate::parser::Command;
 use crate::builtins::Builtin;
 use crate::io::*;
-use crate::spawn::ProcessSpawner;
 use crate::jobs::JobControl;
+use crate::parser::Command;
+use crate::spawn::ProcessSpawner;
+use gbsd::*;
 
-pub fn execute(cmd: &Command, env: &mut crate::env::Environment, history: &[Option<[u8; 256]>; 100], history_count: usize, jobs: &mut JobControl) -> Result<()> {
+pub fn execute(
+    cmd: &Command,
+    env: &mut crate::env::Environment,
+    history: &[Option<[u8; 256]>; 100],
+    history_count: usize,
+    jobs: &mut JobControl,
+) -> Result<()> {
     // Try built-in commands first
     if let Some(builtin) = Builtin::from_name(cmd.name) {
         return execute_builtin(&builtin, cmd, env, history, history_count, jobs);
     }
-    
+
     // External command - spawn process
     let spawner = ProcessSpawner::new(env);
     match spawner.spawn(cmd, env) {
@@ -32,7 +38,14 @@ pub fn execute(cmd: &Command, env: &mut crate::env::Environment, history: &[Opti
     }
 }
 
-fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Environment, history: &[Option<[u8; 256]>; 100], history_count: usize, jobs: &mut JobControl) -> Result<()> {
+fn execute_builtin(
+    builtin: &Builtin,
+    cmd: &Command,
+    env: &mut crate::env::Environment,
+    history: &[Option<[u8; 256]>; 100],
+    history_count: usize,
+    jobs: &mut JobControl,
+) -> Result<()> {
     match builtin {
         Builtin::Exit => {
             exit(0);
@@ -122,10 +135,9 @@ fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Envir
                             let name = &arg[..pos];
                             let value = &arg[pos + 1..];
 
-                            if let (Ok(name_str), Ok(value_str)) = (
-                                core::str::from_utf8(name),
-                                core::str::from_utf8(value)
-                            ) {
+                            if let (Ok(name_str), Ok(value_str)) =
+                                (core::str::from_utf8(name), core::str::from_utf8(value))
+                            {
                                 env.set(name_str, value_str);
                             }
                         }
@@ -158,7 +170,7 @@ fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Envir
                 if let (Some(name_arg), Some(value_arg)) = (cmd.args[0], cmd.args[1]) {
                     if let (Ok(name_str), Ok(value_str)) = (
                         core::str::from_utf8(name_arg),
-                        core::str::from_utf8(value_arg)
+                        core::str::from_utf8(value_arg),
                     ) {
                         env.set(name_str, value_str);
                     }
@@ -221,8 +233,7 @@ fn execute_builtin(builtin: &Builtin, cmd: &Command, env: &mut crate::env::Envir
                     // Parse job ID
                     let job_id = parse_number(arg).unwrap_or(1);
                     jobs.foreground(job_id)
-                }
-                else {
+                } else {
                     println(b"fg: missing job ID")?;
                     Err(Error::Invalid)
                 }

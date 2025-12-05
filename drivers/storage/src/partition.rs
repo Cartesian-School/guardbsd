@@ -52,7 +52,7 @@ impl PartitionTable {
             let offset = 446 + (i * 16);
             let status = mbr[offset];
             let part_type = mbr[offset + 4];
-            
+
             if part_type != 0 {
                 let start_lba = u32::from_le_bytes([
                     mbr[offset + 8],
@@ -60,7 +60,7 @@ impl PartitionTable {
                     mbr[offset + 10],
                     mbr[offset + 11],
                 ]) as u64;
-                
+
                 let sectors = u32::from_le_bytes([
                     mbr[offset + 12],
                     mbr[offset + 13],

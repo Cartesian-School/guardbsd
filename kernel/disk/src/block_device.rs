@@ -61,13 +61,13 @@ impl DiskInfo {
 pub trait DiskDriver {
     /// Read sectors from disk
     fn read_sectors(&mut self, lba: u64, count: u32, buf: &mut [u8]) -> Result<(), DiskError>;
-    
+
     /// Write sectors to disk
     fn write_sectors(&mut self, lba: u64, count: u32, buf: &[u8]) -> Result<(), DiskError>;
-    
+
     /// Flush write cache to disk
     fn flush(&mut self) -> Result<(), DiskError>;
-    
+
     /// Get disk information
     fn identify(&mut self) -> Result<DiskInfo, DiskError>;
 }
@@ -93,78 +93,88 @@ impl BlockDevice {
             info: DiskInfo::empty(),
         }
     }
-    
+
     pub fn init(&mut self, info: DiskInfo) {
         self.info = info;
         self.total_blocks = (info.total_sectors * info.sector_size as u64) / BLOCK_SIZE as u64;
     }
-    
+
     /// Read a 4KB block
     pub fn read_block(&self, block_num: u64, _buf: &mut [u8; BLOCK_SIZE]) -> Result<(), DiskError> {
         if block_num >= self.total_blocks {
             return Err(DiskError::InvalidBlock);
         }
-        
+
         // Convert block to sectors (4KB / 512 = 8 sectors per block)
         let _lba = block_num * 8;
-        
+
         // In full implementation, call driver's read_sectors
         // For now, return error as we don't have actual driver reference
         Err(DiskError::NotSupported)
     }
-    
+
     /// Write a 4KB block
     pub fn write_block(&self, block_num: u64, _buf: &[u8; BLOCK_SIZE]) -> Result<(), DiskError> {
         if block_num >= self.total_blocks {
             return Err(DiskError::InvalidBlock);
         }
-        
+
         let _lba = block_num * 8;
-        
+
         // In full implementation, call driver's write_sectors
         Err(DiskError::NotSupported)
     }
-    
+
     /// Read multiple blocks
-    pub fn read_blocks(&self, start_block: u64, count: u32, buf: &mut [u8]) -> Result<usize, DiskError> {
+    pub fn read_blocks(
+        &self,
+        start_block: u64,
+        count: u32,
+        buf: &mut [u8],
+    ) -> Result<usize, DiskError> {
         if buf.len() < (count as usize * BLOCK_SIZE) {
             return Err(DiskError::InvalidBlock);
         }
-        
+
         for i in 0..count {
             let block_num = start_block + i as u64;
             let offset = i as usize * BLOCK_SIZE;
             let mut block_buf = [0u8; BLOCK_SIZE];
-            
+
             self.read_block(block_num, &mut block_buf)?;
             buf[offset..offset + BLOCK_SIZE].copy_from_slice(&block_buf);
         }
-        
+
         Ok(count as usize * BLOCK_SIZE)
     }
-    
+
     /// Write multiple blocks
-    pub fn write_blocks(&self, start_block: u64, count: u32, buf: &[u8]) -> Result<usize, DiskError> {
+    pub fn write_blocks(
+        &self,
+        start_block: u64,
+        count: u32,
+        buf: &[u8],
+    ) -> Result<usize, DiskError> {
         if buf.len() < (count as usize * BLOCK_SIZE) {
             return Err(DiskError::InvalidBlock);
         }
-        
+
         for i in 0..count {
             let block_num = start_block + i as u64;
             let offset = i as usize * BLOCK_SIZE;
             let mut block_buf = [0u8; BLOCK_SIZE];
-            
+
             block_buf.copy_from_slice(&buf[offset..offset + BLOCK_SIZE]);
             self.write_block(block_num, &block_buf)?;
         }
-        
+
         Ok(count as usize * BLOCK_SIZE)
     }
-    
+
     pub fn get_capacity_mb(&self) -> u64 {
         (self.total_blocks * BLOCK_SIZE as u64) / (1024 * 1024)
     }
-    
+
     pub fn get_model(&self) -> &str {
         let len = self.info.model.iter().position(|&c| c == 0).unwrap_or(40);
         core::str::from_utf8(&self.info.model[..len]).unwrap_or("<invalid>")
@@ -186,7 +196,7 @@ impl DiskRegistry {
             count: 0,
         }
     }
-    
+
     pub fn register(&mut self, device: BlockDevice) -> Option<u32> {
         if self.count < MAX_DISKS {
             self.disks[self.count] = Some(device);
@@ -197,7 +207,7 @@ impl DiskRegistry {
             None
         }
     }
-    
+
     pub fn get(&self, id: u32) -> Option<&BlockDevice> {
         if (id as usize) < self.count {
             self.disks[id as usize].as_ref()
@@ -205,7 +215,7 @@ impl DiskRegistry {
             None
         }
     }
-    
+
     pub fn get_mut(&mut self, id: u32) -> Option<&mut BlockDevice> {
         if (id as usize) < self.count {
             self.disks[id as usize].as_mut()
@@ -213,7 +223,7 @@ impl DiskRegistry {
             None
         }
     }
-    
+
     pub fn count(&self) -> usize {
         self.count
     }
@@ -236,4 +246,3 @@ pub fn get_disk_mut(id: u32) -> Option<&'static mut BlockDevice> {
 pub fn disk_count() -> usize {
     unsafe { DISK_REGISTRY.count() }
 }
-

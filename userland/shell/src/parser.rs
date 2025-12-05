@@ -8,7 +8,7 @@ pub struct Command<'a> {
     pub name: &'a [u8],
     pub args: [Option<&'a [u8]>; 8],
     pub arg_count: usize,
-    pub background: bool,  // true if command ends with &
+    pub background: bool, // true if command ends with &
 }
 
 impl<'a> Command<'a> {
@@ -49,7 +49,7 @@ impl<'a> Command<'a> {
                 b' ' | b'\t' | b'\n' | 0 if !in_single_quote && !in_double_quote => {
                     if in_word {
                         let word = &input[word_start..i];
-                        
+
                         // Check for & (background)
                         if word == b"&" {
                             cmd.background = true;
@@ -93,7 +93,7 @@ impl<'a> Command<'a> {
             None
         }
     }
-    
+
     /// Unescape and dequote a string
     pub fn process_string(input: &[u8]) -> ([u8; 256], usize) {
         let mut output = [0u8; 256];
@@ -101,12 +101,12 @@ impl<'a> Command<'a> {
         let mut in_single_quote = false;
         let mut in_double_quote = false;
         let mut escape_next = false;
-        
+
         for &byte in input {
             if byte == 0 {
                 break;
             }
-            
+
             if escape_next {
                 if out_pos < 255 {
                     // Escaped character
@@ -116,7 +116,7 @@ impl<'a> Command<'a> {
                 escape_next = false;
                 continue;
             }
-            
+
             match byte {
                 b'\\' if !in_single_quote => {
                     escape_next = true;
@@ -135,7 +135,7 @@ impl<'a> Command<'a> {
                 }
             }
         }
-        
+
         (output, out_pos)
     }
 }

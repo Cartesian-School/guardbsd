@@ -9,12 +9,12 @@
 
 use gbsd::*;
 
-mod dns;
 mod dhcp;
+mod dns;
 mod http;
 
-use dns::DnsCache;
 use dhcp::DhcpClient;
+use dns::DnsCache;
 use http::HttpMethod;
 
 static mut DNS_CACHE: DnsCache = DnsCache::new();
@@ -48,7 +48,7 @@ fn netsvc_main() -> ! {
             if req_buf.len() >= 4 {
                 let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
                 let result = handle_request(op, &req_buf[4..], &mut resp_buf[8..]);
-                
+
                 resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
                 let _ = port_send(port, resp_buf.as_ptr(), resp_buf.len());
             }
@@ -72,19 +72,30 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> i64 {
             1 => {
                 // DNS lookup
                 if data.len() >= 4 {
-                    let name_len = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+                    let name_len =
+                        u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
                     if data.len() >= 4 + name_len {
                         let name = &data[4..4 + name_len];
                         let hostname = core::str::from_utf8(name).unwrap_or("<invalid>");
 
                         if let Some(response) = DNS_CACHE.lookup(name) {
-                            klog_info!("netsvc", "DNS query from {} for '{}'", "127.0.0.1", hostname);
+                            klog_info!(
+                                "netsvc",
+                                "DNS query from {} for '{}'",
+                                "127.0.0.1",
+                                hostname
+                            );
                             resp_data[0..4].copy_from_slice(&response.addr);
                             resp_data[4..8].copy_from_slice(&response.ttl.to_le_bytes());
                             return 8;
                         }
 
-                        klog_warn!("netsvc", "DNS query from {} for '{}' - not found", "127.0.0.1", hostname);
+                        klog_warn!(
+                            "netsvc",
+                            "DNS query from {} for '{}' - not found",
+                            "127.0.0.1",
+                            hostname
+                        );
                         -2 // ENOENT
                     } else {
                         klog_warn!("netsvc", "DNS query - invalid name length");
@@ -111,11 +122,14 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> i64 {
                 // Get DHCP lease
                 if DHCP_CLIENT.state == dhcp::DhcpState::Bound {
                     let ip_addr = u32::from_be_bytes(DHCP_CLIENT.lease.ip_addr);
-                    klog_info!("netsvc", "DHCP lease obtained: {}.{}.{}.{}",
-                               (ip_addr >> 24) & 0xff,
-                               (ip_addr >> 16) & 0xff,
-                               (ip_addr >> 8) & 0xff,
-                               ip_addr & 0xff);
+                    klog_info!(
+                        "netsvc",
+                        "DHCP lease obtained: {}.{}.{}.{}",
+                        (ip_addr >> 24) & 0xff,
+                        (ip_addr >> 16) & 0xff,
+                        (ip_addr >> 8) & 0xff,
+                        ip_addr & 0xff
+                    );
                     resp_data[0..4].copy_from_slice(&DHCP_CLIENT.lease.ip_addr);
                     resp_data[4..8].copy_from_slice(&DHCP_CLIENT.lease.netmask);
                     resp_data[8..12].copy_from_slice(&DHCP_CLIENT.lease.gateway);
@@ -134,7 +148,8 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> i64 {
                         HttpMethod::Post => "POST",
                         HttpMethod::Head => "HEAD",
                     };
-                    let path_str = core::str::from_utf8(&request.path[..request.path_len]).unwrap_or("<invalid>");
+                    let path_str = core::str::from_utf8(&request.path[..request.path_len])
+                        .unwrap_or("<invalid>");
                     klog_info!("netsvc", "HTTP request {} {}", method_str, path_str);
 
                     resp_data[0] = request.method as u8;

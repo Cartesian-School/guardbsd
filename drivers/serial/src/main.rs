@@ -9,11 +9,11 @@
 
 use gbsd::*;
 
-mod uart;
 mod console;
+mod uart;
 
-use uart::Uart;
 use console::Console;
+use uart::Uart;
 
 const UART_BASE: u16 = 0x3F8; // COM1
 const SERIAL_MAJOR: u16 = 10;
@@ -56,7 +56,7 @@ fn serial_main() -> ! {
             if req_buf.len() >= 4 {
                 let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
                 let result = handle_request(op, &req_buf[4..], &mut resp_buf[8..]);
-                
+
                 resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
                 let _ = port_send(port, resp_buf.as_ptr(), resp_buf.len());
             }

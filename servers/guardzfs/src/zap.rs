@@ -8,9 +8,9 @@
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct ZapEntry {
-    pub key: [u8; 64],        // Filename
+    pub key: [u8; 64], // Filename
     pub key_len: u8,
-    pub value: u64,           // Object ID
+    pub value: u64, // Object ID
     pub valid: bool,
 }
 
@@ -23,7 +23,7 @@ impl ZapEntry {
             valid: false,
         }
     }
-    
+
     pub fn new(name: &str, object_id: u64) -> Self {
         let mut entry = Self::empty();
         let name_bytes = name.as_bytes();
@@ -34,12 +34,12 @@ impl ZapEntry {
         entry.valid = true;
         entry
     }
-    
+
     pub fn get_name(&self) -> &str {
         let len = self.key_len as usize;
         core::str::from_utf8(&self.key[..len]).unwrap_or("<invalid>")
     }
-    
+
     pub fn matches(&self, name: &str) -> bool {
         self.valid && self.get_name() == name
     }
@@ -56,7 +56,7 @@ impl ZapDirectory {
             entries: [ZapEntry::empty(); 64],
         }
     }
-    
+
     pub fn insert(&mut self, name: &str, object_id: u64) -> bool {
         // Find empty slot
         for entry in &mut self.entries {
@@ -67,7 +67,7 @@ impl ZapDirectory {
         }
         false
     }
-    
+
     pub fn lookup(&self, name: &str) -> Option<u64> {
         for entry in &self.entries {
             if entry.matches(name) {
@@ -76,7 +76,7 @@ impl ZapDirectory {
         }
         None
     }
-    
+
     pub fn remove(&mut self, name: &str) -> bool {
         for entry in &mut self.entries {
             if entry.matches(name) {
@@ -86,16 +86,13 @@ impl ZapDirectory {
         }
         false
     }
-    
+
     pub fn to_bytes(&self) -> &[u8] {
         unsafe {
-            core::slice::from_raw_parts(
-                self as *const _ as *const u8,
-                core::mem::size_of::<Self>()
-            )
+            core::slice::from_raw_parts(self as *const _ as *const u8, core::mem::size_of::<Self>())
         }
     }
-    
+
     pub fn from_bytes(data: &[u8]) -> Self {
         let mut zap = Self::new();
         if data.len() >= core::mem::size_of::<Self>() {
@@ -103,11 +100,10 @@ impl ZapDirectory {
                 core::ptr::copy_nonoverlapping(
                     data.as_ptr(),
                     &mut zap as *mut _ as *mut u8,
-                    core::mem::size_of::<Self>()
+                    core::mem::size_of::<Self>(),
                 );
             }
         }
         zap
     }
 }
-

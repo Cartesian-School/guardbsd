@@ -288,7 +288,10 @@ impl Logger {
 
     fn record(&self, level: LogLevel, subsystem: &'static str, args: fmt::Arguments) {
         // Recursion protection: prevent logging while already logging
-        if LOGGING_ACTIVE.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+        if LOGGING_ACTIVE
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
             // Recursion detected: use serial fallback only
             let mut msg_buf = MsgBuf::new();
             let _ = fmt::write(&mut msg_buf, args);

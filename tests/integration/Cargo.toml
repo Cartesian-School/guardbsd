@@ -1,0 +1,28 @@
+[package]
+name = "integration_tests"
+version = "1.0.0"
+edition = "2021"
+authors = ["Siergej Sobolewski <siergej@cartesianschool.org>"]
+license = "BSD-3-Clause"
+
+[[bin]]
+name = "process_tests"
+path = "process_integration_test.rs"
+test = false
+
+[[bin]]
+name = "signal_tests"
+path = "signal_integration_test.rs"
+test = false
+
+[dependencies]
+
+[profile.dev]
+panic = "abort"
+opt-level = 0
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+lto = true
+

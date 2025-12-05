@@ -30,9 +30,9 @@ impl Error {
             5 => Error::NoRights,
             6 => Error::CapInvalid,
             7 => Error::Alignment,
-            11 => Error::Again,  // EAGAIN
+            11 => Error::Again,      // EAGAIN
             13 => Error::Permission, // EACCES
-            38 => Error::NoSys, // ENOSYS
+            38 => Error::NoSys,      // ENOSYS
             _ => Error::Invalid,
         }
     }

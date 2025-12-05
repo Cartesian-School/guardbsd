@@ -56,8 +56,7 @@ impl Environment {
         // Check if variable already exists
         for i in 0..self.count {
             if let Some(ref mut var) = self.vars[i] {
-                if var.name_len == name_bytes.len() &&
-                   &var.name[..var.name_len] == name_bytes {
+                if var.name_len == name_bytes.len() && &var.name[..var.name_len] == name_bytes {
                     // Update existing
                     var.value[..value_bytes.len()].copy_from_slice(value_bytes);
                     var.value_len = value_bytes.len();
@@ -88,8 +87,7 @@ impl Environment {
 
         for i in 0..self.count {
             if let Some(ref var) = self.vars[i] {
-                if var.name_len == name_bytes.len() &&
-                   &var.name[..var.name_len] == name_bytes {
+                if var.name_len == name_bytes.len() && &var.name[..var.name_len] == name_bytes {
                     return Some(&var.value[..var.value_len]);
                 }
             }
@@ -122,7 +120,8 @@ impl Environment {
                         if let Ok(name_str) = core::str::from_utf8(var_name) {
                             if let Some(value) = self.get(name_str) {
                                 let copy_len = core::cmp::min(value.len(), output.len() - out_pos);
-                                output[out_pos..out_pos + copy_len].copy_from_slice(&value[..copy_len]);
+                                output[out_pos..out_pos + copy_len]
+                                    .copy_from_slice(&value[..copy_len]);
                                 out_pos += copy_len;
                                 continue;
                             }
@@ -132,8 +131,9 @@ impl Environment {
                     // $VAR syntax
                     let start = in_pos;
 
-                    while in_pos < input.len() &&
-                          (input[in_pos].is_ascii_alphanumeric() || input[in_pos] == b'_') {
+                    while in_pos < input.len()
+                        && (input[in_pos].is_ascii_alphanumeric() || input[in_pos] == b'_')
+                    {
                         in_pos += 1;
                     }
 

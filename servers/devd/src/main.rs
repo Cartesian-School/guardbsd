@@ -27,10 +27,19 @@ fn devd_main() -> ! {
         // Register standard devices
         let null_id = DEVICE_TABLE.register(DeviceType::Character, 0, 0); // null
         let console_id = DEVICE_TABLE.register(DeviceType::Character, 1, 0); // console
-        let device_count = if null_id.is_some() && console_id.is_some() { 2 } else { 0 };
+        let device_count = if null_id.is_some() && console_id.is_some() {
+            2
+        } else {
+            0
+        };
 
         let pid = getpid().unwrap_or(0);
-        klog_info!("devd", "device server online (devices={}, pid={})", device_count, pid);
+        klog_info!(
+            "devd",
+            "device server online (devices={}, pid={})",
+            device_count,
+            pid
+        );
     }
 
     let port = match port_create() {
@@ -85,12 +94,23 @@ fn handle_request(req: &DevRequest) -> DevResponse {
                             DeviceType::Block => "block",
                             DeviceType::Network => "net",
                         };
-                        klog_info!("devd", "register device id={} name='{}/{}' type={}",
-                                 id, req.major, req.minor, type_str);
+                        klog_info!(
+                            "devd",
+                            "register device id={} name='{}/{}' type={}",
+                            id,
+                            req.major,
+                            req.minor,
+                            type_str
+                        );
                         DevResponse::ok(id)
                     }
                     None => {
-                        klog_error!("devd", "failed to initialize device major={} minor={}", req.major, req.minor);
+                        klog_error!(
+                            "devd",
+                            "failed to initialize device major={} minor={}",
+                            req.major,
+                            req.minor
+                        );
                         DevResponse::err(28) // ENOSPC
                     }
                 }

@@ -23,7 +23,7 @@ impl Disk {
         if lba >= self.sectors {
             return Err(-22); // EINVAL
         }
-        
+
         if buf.len() < SECTOR_SIZE {
             return Err(-22); // EINVAL
         }
@@ -37,7 +37,7 @@ impl Disk {
         if lba >= self.sectors {
             return Err(-22); // EINVAL
         }
-        
+
         if buf.len() < SECTOR_SIZE {
             return Err(-22); // EINVAL
         }

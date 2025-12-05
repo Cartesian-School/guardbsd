@@ -4,15 +4,16 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use crate::{Error, Result};
 use crate::syscall::{syscall0, syscall1, syscall2};
+use crate::{Error, Result};
 use shared::syscall_numbers::*;
 
 /// Fork current process
 pub fn fork() -> Result<i32> {
     let ret = unsafe { syscall0(SYS_FORK as u64) };
-    if ret < 0 {
-        Err(Error::from_code(-(ret as i32)))
+    // Check if high bit is set (negative as i64)
+    if (ret as i64) < 0 {
+        Err(Error::from_code(-(ret as i64) as i32))
     } else {
         Ok(ret as i32)
     }
@@ -21,8 +22,9 @@ pub fn fork() -> Result<i32> {
 /// Execute a new program
 pub fn exec(path: *const u8, argv: *const *const u8) -> Result<()> {
     let ret = unsafe { syscall2(SYS_EXEC as u64, path as u64, argv as u64) };
-    if ret < 0 {
-        Err(Error::from_code(-(ret as i32)))
+    // Check if high bit is set (negative as i64)
+    if (ret as i64) < 0 {
+        Err(Error::from_code(-(ret as i64) as i32))
     } else {
         Ok(())
     }
@@ -31,8 +33,9 @@ pub fn exec(path: *const u8, argv: *const *const u8) -> Result<()> {
 /// Wait for child process
 pub fn wait(status: *mut i32) -> Result<i32> {
     let ret = unsafe { syscall1(SYS_WAIT as u64, status as u64) };
-    if ret < 0 {
-        Err(Error::from_code(-(ret as i32)))
+    // Check if high bit is set (negative as i64)
+    if (ret as i64) < 0 {
+        Err(Error::from_code(-(ret as i64) as i32))
     } else {
         Ok(ret as i32)
     }
@@ -55,7 +58,11 @@ pub fn exit(status: i32) -> ! {
     unsafe {
         syscall1(SYS_EXIT as u64, status as u64);
     }
-    loop {}
+    // SAFETY: exit syscall never returns, but compiler doesn't know that
+    #[allow(clippy::empty_loop)]
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 /// Yield CPU to other processes
@@ -64,4 +71,3 @@ pub fn yield_cpu() {
         syscall0(SYS_YIELD as u64);
     }
 }
-

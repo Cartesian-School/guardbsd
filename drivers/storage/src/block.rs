@@ -24,10 +24,10 @@ impl BlockDevice {
         // Read MBR
         let mut mbr = [0u8; 512];
         self.disk.read_sector(0, &mut mbr)?;
-        
+
         // Parse partition table
         self.partitions.parse_mbr(&mbr)?;
-        
+
         Ok(())
     }
 

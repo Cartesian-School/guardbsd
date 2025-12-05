@@ -4,8 +4,8 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use crate::vdev::*;
 use crate::blockptr::*;
+use crate::vdev::*;
 
 pub const MAX_POOLS: usize = 4;
 pub const MAX_VDEVS_PER_POOL: usize = 8;
@@ -13,27 +13,27 @@ pub const MAX_VDEVS_PER_POOL: usize = 8;
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
 pub enum PoolHealth {
-    Online = 0,      // All vdevs healthy
-    Degraded = 1,    // Some vdevs failed but data intact
-    Faulted = 2,     // Too many failures, data loss
+    Online = 0,   // All vdevs healthy
+    Degraded = 1, // Some vdevs failed but data intact
+    Faulted = 2,  // Too many failures, data loss
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct PoolLabel {
-    pub magic: [u8; 8],        // "GUARDZFS"
+    pub magic: [u8; 8], // "GUARDZFS"
     pub version: u32,
     pub pool_guid: u64,
     pub name: [u8; 64],
     pub state: u8,
-    pub txg: u64,              // Current transaction group
+    pub txg: u64, // Current transaction group
     pub uber_block_offset: u64,
     pub checksum: [u8; 32],
 }
 
 impl PoolLabel {
     pub const MAGIC: &'static [u8; 8] = b"GUARDZFS";
-    
+
     pub const fn new() -> Self {
         Self {
             magic: *Self::MAGIC,
@@ -46,7 +46,7 @@ impl PoolLabel {
             checksum: [0; 32],
         }
     }
-    
+
     pub fn validate(&self) -> bool {
         &self.magic == Self::MAGIC && self.version == 1
     }
@@ -57,20 +57,20 @@ pub struct StoragePool {
     pub name: [u8; 64],
     pub guid: u64,
     pub health: PoolHealth,
-    
+
     // Virtual devices
     pub vdevs: [VirtualDevice; MAX_VDEVS_PER_POOL],
     pub vdev_count: u8,
-    
+
     // Capacity
     pub total_blocks: u64,
     pub free_blocks: u64,
     pub allocated_blocks: u64,
-    
+
     // Transaction groups
     pub current_txg: u64,
     pub syncing_txg: u64,
-    
+
     // Statistics
     pub read_ops: u64,
     pub write_ops: u64,
@@ -97,7 +97,7 @@ impl StoragePool {
             bytes_written: 0,
         }
     }
-    
+
     pub fn init(&mut self, name: &str, guid: u64) {
         let name_bytes = name.as_bytes();
         let len = name_bytes.len().min(63);
@@ -105,22 +105,22 @@ impl StoragePool {
         self.guid = guid;
         self.current_txg = 1;
     }
-    
+
     pub fn add_vdev(&mut self, vdev: VirtualDevice) -> Result<(), &'static str> {
         if self.vdev_count >= MAX_VDEVS_PER_POOL as u8 {
             return Err("Pool full");
         }
-        
+
         self.vdevs[self.vdev_count as usize] = vdev;
         self.vdev_count += 1;
-        
+
         // Update pool capacity
         self.total_blocks += vdev.total_blocks;
         self.free_blocks += vdev.free_blocks;
-        
+
         Ok(())
     }
-    
+
     pub fn allocate_block(&mut self) -> Option<(u8, u64)> {
         // Round-robin allocation across vdevs
         for i in 0..self.vdev_count {
@@ -132,7 +132,7 @@ impl StoragePool {
         }
         None
     }
-    
+
     pub fn free_block(&mut self, vdev_id: u8, _block: u64) {
         if (vdev_id as usize) < self.vdev_count as usize {
             self.vdevs[vdev_id as usize].free_block();
@@ -140,29 +140,29 @@ impl StoragePool {
             self.allocated_blocks -= 1;
         }
     }
-    
+
     pub fn begin_txg(&mut self) {
         self.current_txg += 1;
     }
-    
+
     pub fn sync_txg(&mut self) {
         self.syncing_txg = self.current_txg;
         // TODO: Flush all dirty data to disk
         // TODO: Write uber block
     }
-    
+
     pub fn get_health(&mut self) -> PoolHealth {
         let mut online_count = 0;
         let mut degraded_count = 0;
-        
+
         for i in 0..self.vdev_count {
             match self.vdevs[i as usize].state {
                 VdevState::Online => online_count += 1,
                 VdevState::Degraded => degraded_count += 1,
-                VdevState::Offline => {},
+                VdevState::Offline => {}
             }
         }
-        
+
         if online_count == self.vdev_count {
             self.health = PoolHealth::Online;
         } else if degraded_count > 0 {
@@ -170,10 +170,10 @@ impl StoragePool {
         } else {
             self.health = PoolHealth::Faulted;
         }
-        
+
         self.health
     }
-    
+
     pub fn get_used_percent(&self) -> u8 {
         if self.total_blocks == 0 {
             return 0;
@@ -194,22 +194,22 @@ impl PoolRegistry {
             count: 0,
         }
     }
-    
+
     pub fn create_pool(&mut self, name: &str, guid: u64) -> Option<usize> {
         if self.count >= MAX_POOLS {
             return None;
         }
-        
+
         let mut pool = StoragePool::new();
         pool.init(name, guid);
-        
+
         self.pools[self.count] = Some(pool);
         let id = self.count;
         self.count += 1;
-        
+
         Some(id)
     }
-    
+
     pub fn get(&self, id: usize) -> Option<&StoragePool> {
         if id < self.count {
             self.pools[id].as_ref()
@@ -217,7 +217,7 @@ impl PoolRegistry {
             None
         }
     }
-    
+
     pub fn get_mut(&mut self, id: usize) -> Option<&mut StoragePool> {
         if id < self.count {
             self.pools[id].as_mut()
@@ -240,4 +240,3 @@ pub fn get_pool(id: usize) -> Option<&'static StoragePool> {
 pub fn get_pool_mut(id: usize) -> Option<&'static mut StoragePool> {
     unsafe { POOL_REGISTRY.get_mut(id) }
 }
-

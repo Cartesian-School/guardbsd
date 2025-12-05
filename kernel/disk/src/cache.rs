@@ -50,7 +50,7 @@ impl BlockCache {
             misses: 0,
         }
     }
-    
+
     fn find_entry(&self, device_id: u32, block_num: u64) -> Option<usize> {
         for (i, entry) in self.entries.iter().enumerate() {
             if entry.valid && entry.device_id == device_id && entry.block_num == block_num {
@@ -59,11 +59,11 @@ impl BlockCache {
         }
         None
     }
-    
+
     fn find_lru_entry(&self) -> usize {
         let mut lru_idx = 0;
         let mut lru_time = u64::MAX;
-        
+
         for (i, entry) in self.entries.iter().enumerate() {
             if !entry.valid {
                 return i; // Use invalid entry first
@@ -73,13 +73,18 @@ impl BlockCache {
                 lru_idx = i;
             }
         }
-        
+
         lru_idx
     }
-    
-    pub fn read(&mut self, device: &BlockDevice, block_num: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), DiskError> {
+
+    pub fn read(
+        &mut self,
+        device: &BlockDevice,
+        block_num: u64,
+        buf: &mut [u8; BLOCK_SIZE],
+    ) -> Result<(), DiskError> {
         self.access_counter += 1;
-        
+
         // Check if block is in cache
         if let Some(idx) = self.find_entry(device.id, block_num) {
             self.hits += 1;
@@ -87,21 +92,21 @@ impl BlockCache {
             self.entries[idx].access_time = self.access_counter;
             return Ok(());
         }
-        
+
         // Cache miss - read from disk
         self.misses += 1;
         device.read_block(block_num, buf)?;
-        
+
         // Find LRU entry to evict
         let idx = self.find_lru_entry();
-        
+
         // Write back if dirty
         if self.entries[idx].valid && self.entries[idx].dirty {
             if let Some(dev) = get_disk(self.entries[idx].device_id) {
                 let _ = dev.write_block(self.entries[idx].block_num, &self.entries[idx].data);
             }
         }
-        
+
         // Insert new entry
         self.entries[idx].device_id = device.id;
         self.entries[idx].block_num = block_num;
@@ -109,13 +114,18 @@ impl BlockCache {
         self.entries[idx].valid = true;
         self.entries[idx].dirty = false;
         self.entries[idx].access_time = self.access_counter;
-        
+
         Ok(())
     }
-    
-    pub fn write(&mut self, device: &BlockDevice, block_num: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), DiskError> {
+
+    pub fn write(
+        &mut self,
+        device: &BlockDevice,
+        block_num: u64,
+        buf: &[u8; BLOCK_SIZE],
+    ) -> Result<(), DiskError> {
         self.access_counter += 1;
-        
+
         // Check if block is in cache
         if let Some(idx) = self.find_entry(device.id, block_num) {
             self.entries[idx].data.copy_from_slice(buf);
@@ -123,17 +133,17 @@ impl BlockCache {
             self.entries[idx].access_time = self.access_counter;
             return Ok(());
         }
-        
+
         // Not in cache - find LRU entry
         let idx = self.find_lru_entry();
-        
+
         // Write back if dirty
         if self.entries[idx].valid && self.entries[idx].dirty {
             if let Some(dev) = get_disk(self.entries[idx].device_id) {
                 let _ = dev.write_block(self.entries[idx].block_num, &self.entries[idx].data);
             }
         }
-        
+
         // Insert new entry
         self.entries[idx].device_id = device.id;
         self.entries[idx].block_num = block_num;
@@ -141,13 +151,13 @@ impl BlockCache {
         self.entries[idx].valid = true;
         self.entries[idx].dirty = true;
         self.entries[idx].access_time = self.access_counter;
-        
+
         Ok(())
     }
-    
+
     pub fn flush(&mut self) -> usize {
         let mut flushed = 0;
-        
+
         for entry in &mut self.entries {
             if entry.valid && entry.dirty {
                 if let Some(device) = get_disk(entry.device_id) {
@@ -158,10 +168,10 @@ impl BlockCache {
                 }
             }
         }
-        
+
         flushed
     }
-    
+
     pub fn invalidate(&mut self, device_id: u32) {
         for entry in &mut self.entries {
             if entry.valid && entry.device_id == device_id {
@@ -175,7 +185,7 @@ impl BlockCache {
             }
         }
     }
-    
+
     pub fn get_stats(&self) -> (u64, u64, u32) {
         let total = self.hits + self.misses;
         let hit_rate = if total > 0 {
@@ -183,18 +193,26 @@ impl BlockCache {
         } else {
             0
         };
-        
+
         (self.hits, self.misses, hit_rate)
     }
 }
 
 static mut GLOBAL_CACHE: BlockCache = BlockCache::new();
 
-pub fn cache_read(device: &BlockDevice, block_num: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), DiskError> {
+pub fn cache_read(
+    device: &BlockDevice,
+    block_num: u64,
+    buf: &mut [u8; BLOCK_SIZE],
+) -> Result<(), DiskError> {
     unsafe { GLOBAL_CACHE.read(device, block_num, buf) }
 }
 
-pub fn cache_write(device: &BlockDevice, block_num: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), DiskError> {
+pub fn cache_write(
+    device: &BlockDevice,
+    block_num: u64,
+    buf: &[u8; BLOCK_SIZE],
+) -> Result<(), DiskError> {
     unsafe { GLOBAL_CACHE.write(device, block_num, buf) }
 }
 
@@ -209,4 +227,3 @@ pub fn cache_invalidate(device_id: u32) {
 pub fn cache_stats() -> (u64, u64, u32) {
     unsafe { GLOBAL_CACHE.get_stats() }
 }
-

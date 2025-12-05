@@ -25,20 +25,20 @@ impl Uart {
         unsafe {
             // Disable interrupts
             outb(self.base + 1, 0x00);
-            
+
             // Enable DLAB (set baud rate divisor)
             outb(self.base + 3, 0x80);
-            
+
             // Set divisor to 3 (38400 baud)
             outb(self.base, 0x03);
             outb(self.base + 1, 0x00);
-            
+
             // 8 bits, no parity, one stop bit
             outb(self.base + 3, 0x03);
-            
+
             // Enable FIFO
             outb(self.base + 2, 0xC7);
-            
+
             // Enable interrupts
             outb(self.base + 1, 0x01);
         }

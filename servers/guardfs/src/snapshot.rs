@@ -32,25 +32,25 @@ impl Snapshot {
             reserved: [0; 40],
         }
     }
-    
+
     pub fn new(id: u32, name: &str, root_inode: u32) -> Self {
         let mut snap = Self::empty();
         snap.id = id;
         snap.root_inode = root_inode;
         snap.timestamp = get_time();
         snap.refcount = 1;
-        
+
         let name_bytes = name.as_bytes();
         let copy_len = name_bytes.len().min(63);
         snap.name[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-        
+
         snap
     }
-    
+
     pub fn is_valid(&self) -> bool {
         self.id != 0 && self.refcount > 0
     }
-    
+
     pub fn get_name(&self) -> &str {
         let len = self.name.iter().position(|&c| c == 0).unwrap_or(64);
         core::str::from_utf8(&self.name[..len]).unwrap_or("<invalid>")
@@ -69,7 +69,7 @@ impl SnapshotManager {
             next_id: 1,
         }
     }
-    
+
     pub fn create(&mut self, name: &str, root_inode: u32) -> Option<u32> {
         // Find free slot
         for snap in &mut self.snapshots {
@@ -82,7 +82,7 @@ impl SnapshotManager {
         }
         None // No free slots
     }
-    
+
     pub fn delete(&mut self, id: u32) -> bool {
         for snap in &mut self.snapshots {
             if snap.id == id {
@@ -95,7 +95,7 @@ impl SnapshotManager {
         }
         false
     }
-    
+
     pub fn get(&self, id: u32) -> Option<&Snapshot> {
         for snap in &self.snapshots {
             if snap.id == id && snap.is_valid() {
@@ -104,7 +104,7 @@ impl SnapshotManager {
         }
         None
     }
-    
+
     pub fn find_by_name(&self, name: &str) -> Option<&Snapshot> {
         for snap in &self.snapshots {
             if snap.is_valid() && snap.get_name() == name {
@@ -113,11 +113,11 @@ impl SnapshotManager {
         }
         None
     }
-    
+
     pub fn list(&self) -> &[Snapshot] {
         &self.snapshots
     }
-    
+
     pub fn count(&self) -> usize {
         self.snapshots.iter().filter(|s| s.is_valid()).count()
     }
@@ -134,7 +134,7 @@ fn get_time() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_snapshot_create() {
         let mut mgr = SnapshotManager::new();
@@ -142,15 +142,14 @@ mod tests {
         assert!(id.is_some());
         assert_eq!(id.unwrap(), 1);
     }
-    
+
     #[test]
     fn test_snapshot_find() {
         let mut mgr = SnapshotManager::new();
         let id = mgr.create("my_snapshot", 2).unwrap();
-        
+
         let snap = mgr.find_by_name("my_snapshot");
         assert!(snap.is_some());
         assert_eq!(snap.unwrap().id, id);
     }
 }
-

@@ -7,11 +7,11 @@
 #![no_std]
 #![no_main]
 
-use gbsd::*;
 use crate::ops::*;
+use gbsd::*;
 
-mod vnode;
 mod ops;
+mod vnode;
 
 const MAX_OPEN_FILES: usize = 256;
 const MAX_MOUNTS: usize = 16;

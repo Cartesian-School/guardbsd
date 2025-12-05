@@ -37,7 +37,7 @@ impl IcmpMessage {
         let code = buf[1];
         let id = u16::from_be_bytes([buf[4], buf[5]]);
         let seq = u16::from_be_bytes([buf[6], buf[7]]);
-        
+
         let data_len = buf.len().saturating_sub(8).min(1472);
 
         let mut message = Self::new();

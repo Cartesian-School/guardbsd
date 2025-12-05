@@ -53,48 +53,46 @@ impl SwapSpace {
             active: false,
         }
     }
-    
+
     pub fn detect_swap(device: &BlockDevice, start_sector: u64) -> Result<Self, DiskError> {
         // Read first sector (4096 bytes)
         let mut sector = [0u8; 4096];
         // In real implementation, would call device.read_sectors()
-        
+
         // Check for swap signature
         if &sector[SWAP_SIGNATURE_OFFSET..SWAP_SIGNATURE_OFFSET + 10] == SWAP_SIGNATURE {
             // Parse swap header
             let mut swap = SwapSpace::new(device.id, start_sector, 0);
-            
+
             // Read header (simplified)
-            swap.header.version = u32::from_le_bytes([
-                sector[0], sector[1], sector[2], sector[3]
-            ]);
-            
+            swap.header.version = u32::from_le_bytes([sector[0], sector[1], sector[2], sector[3]]);
+
             Ok(swap)
         } else {
             Err(DiskError::NotSupported)
         }
     }
-    
+
     pub fn activate(&mut self) -> Result<(), DiskError> {
         if self.active {
             return Err(DiskError::DeviceBusy);
         }
-        
+
         // TODO: Register with memory manager
         self.active = true;
         Ok(())
     }
-    
+
     pub fn deactivate(&mut self) -> Result<(), DiskError> {
         if !self.active {
             return Ok(());
         }
-        
+
         // TODO: Unregister from memory manager
         self.active = false;
         Ok(())
     }
-    
+
     pub fn get_size_mb(&self) -> u64 {
         (self.size_sectors * 512) / (1024 * 1024)
     }
@@ -115,7 +113,7 @@ impl SwapRegistry {
             count: 0,
         }
     }
-    
+
     pub fn register(&mut self, swap: SwapSpace) -> Option<usize> {
         if self.count < MAX_SWAP {
             self.swaps[self.count] = Some(swap);
@@ -126,7 +124,7 @@ impl SwapRegistry {
             None
         }
     }
-    
+
     pub fn get(&self, id: usize) -> Option<&SwapSpace> {
         if id < self.count {
             self.swaps[id].as_ref()
@@ -134,7 +132,7 @@ impl SwapRegistry {
             None
         }
     }
-    
+
     pub fn get_mut(&mut self, id: usize) -> Option<&mut SwapSpace> {
         if id < self.count {
             self.swaps[id].as_mut()
@@ -142,11 +140,11 @@ impl SwapRegistry {
             None
         }
     }
-    
+
     pub fn count(&self) -> usize {
         self.count
     }
-    
+
     pub fn get_total_swap_mb(&self) -> u64 {
         let mut total = 0;
         for i in 0..self.count {
@@ -195,4 +193,3 @@ pub fn swapoff(id: usize) -> Result<(), DiskError> {
         Err(DiskError::DeviceNotFound)
     }
 }
-

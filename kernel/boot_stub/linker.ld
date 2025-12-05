@@ -1,16 +1,14 @@
 OUTPUT_FORMAT(elf32-i386)
 OUTPUT_ARCH(i386)
-ENTRY(_start)
+ENTRY(multiboot_header)
 
 SECTIONS
 {
     . = 0x00100000;
 
-    .multiboot : {
-        KEEP(*(.multiboot))
-    }
-
-    .text : {
+    /* Multiboot header MUST be at the very beginning of .text */
+    .text : ALIGN(4K) {
+        *(.text.multiboot_header)
         *(.text .text.*)
     }
 

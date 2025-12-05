@@ -25,8 +25,13 @@ fn ramfs_main() -> ! {
     unsafe {
         RAMFS.init();
         let pid = getpid().unwrap_or(0);
-        klog_info!("ramfs", "RAMFS mounted (nodes={}, max_file={}, pid={})",
-                   RAMFS.node_count(), 4096, pid);
+        klog_info!(
+            "ramfs",
+            "RAMFS mounted (nodes={}, max_file={}, pid={})",
+            RAMFS.node_count(),
+            4096,
+            pid
+        );
     }
 
     // Use known port for RAMFS
@@ -41,7 +46,7 @@ fn ramfs_main() -> ! {
         if port_receive(port, req_buf.as_mut_ptr(), req_buf.len()).is_ok() {
             let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
             let result = handle_request(op, &req_buf[8..]);
-            
+
             resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
             let _ = port_send(port, resp_buf.as_ptr(), resp_buf.len());
         }
@@ -50,7 +55,7 @@ fn ramfs_main() -> ! {
         unsafe {
             core::arch::asm!("pause", options(nomem, nostack));
         }
-        
+
         #[cfg(target_arch = "aarch64")]
         unsafe {
             core::arch::asm!("yield", options(nomem, nostack));
@@ -61,7 +66,8 @@ fn ramfs_main() -> ! {
 fn handle_request(op: u32, data: &[u8]) -> i64 {
     unsafe {
         match op {
-            1 => { // Open
+            1 => {
+                // Open
                 if data.len() >= 264 {
                     let flags = u32::from_le_bytes([data[256], data[257], data[258], data[259]]);
                     ops::open(&mut RAMFS, &data[..256], flags)
@@ -69,7 +75,8 @@ fn handle_request(op: u32, data: &[u8]) -> i64 {
                     -22 // EINVAL
                 }
             }
-            3 => { // Read
+            3 => {
+                // Read
                 if data.len() >= 4 {
                     let fd = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
                     let mut buf = [0u8; 4096];
@@ -78,7 +85,8 @@ fn handle_request(op: u32, data: &[u8]) -> i64 {
                     -22 // EINVAL
                 }
             }
-            4 => { // Write
+            4 => {
+                // Write
                 if data.len() >= 4 {
                     let fd = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
                     ops::write(&mut RAMFS, fd, &data[4..])
@@ -86,14 +94,16 @@ fn handle_request(op: u32, data: &[u8]) -> i64 {
                     -22 // EINVAL
                 }
             }
-            6 => { // Mkdir
+            6 => {
+                // Mkdir
                 if data.len() >= 256 {
                     ops::mkdir(&mut RAMFS, &data[..256])
                 } else {
                     -22 // EINVAL
                 }
             }
-            8 => { // Unlink
+            8 => {
+                // Unlink
                 if data.len() >= 256 {
                     ops::unlink(&mut RAMFS, &data[..256])
                 } else {

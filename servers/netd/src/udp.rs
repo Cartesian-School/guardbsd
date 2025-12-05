@@ -29,7 +29,7 @@ impl UdpDatagram {
         let src_port = u16::from_be_bytes([buf[0], buf[1]]);
         let dst_port = u16::from_be_bytes([buf[2], buf[3]]);
         let length = u16::from_be_bytes([buf[4], buf[5]]) as usize;
-        
+
         let data_len = length.saturating_sub(8).min(1472);
 
         let mut datagram = Self::new();

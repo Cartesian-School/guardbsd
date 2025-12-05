@@ -4,8 +4,11 @@
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use crate::syscall::{syscall1, syscall2, syscall3, SYS_OPEN, SYS_CLOSE, SYS_READ, SYS_WRITE, SYS_STAT, SYS_MKDIR, SYS_UNLINK, SYS_RENAME, SYS_SYNC, SYS_CHDIR, SYS_GETCWD, SYS_MOUNT, SYS_UMOUNT};
 use crate::error::{Error, Result};
+use crate::syscall::{
+    syscall1, syscall2, syscall3, SYS_CHDIR, SYS_CLOSE, SYS_GETCWD, SYS_MKDIR, SYS_MOUNT, SYS_OPEN,
+    SYS_READ, SYS_RENAME, SYS_STAT, SYS_SYNC, SYS_UMOUNT, SYS_UNLINK, SYS_WRITE,
+};
 
 pub type Fd = u64;
 
@@ -17,19 +20,19 @@ pub const O_CREAT: u64 = 0x200;
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Stat {
-    pub dev: u64,      // device
-    pub ino: u64,      // inode
-    pub mode: u32,     // protection
-    pub nlink: u32,    // number of hard links
-    pub uid: u32,      // user ID of owner
-    pub gid: u32,      // group ID of owner
-    pub rdev: u64,     // device type (if inode device)
-    pub size: u64,     // total size, in bytes
-    pub blksize: u32,  // blocksize for filesystem I/O
-    pub blocks: u64,   // number of 512B blocks allocated
-    pub atime: u64,    // time of last access
-    pub mtime: u64,    // time of last modification
-    pub ctime: u64,    // time of last status change
+    pub dev: u64,     // device
+    pub ino: u64,     // inode
+    pub mode: u32,    // protection
+    pub nlink: u32,   // number of hard links
+    pub uid: u32,     // user ID of owner
+    pub gid: u32,     // group ID of owner
+    pub rdev: u64,    // device type (if inode device)
+    pub size: u64,    // total size, in bytes
+    pub blksize: u32, // blocksize for filesystem I/O
+    pub blocks: u64,  // number of 512B blocks allocated
+    pub atime: u64,   // time of last access
+    pub mtime: u64,   // time of last modification
+    pub ctime: u64,   // time of last status change
 }
 
 // Filesystem syscalls are reserved in the kernel but not implemented yet.
@@ -67,7 +70,14 @@ pub fn close(fd: Fd) -> Result<()> {
 /// Returns an error if the system call fails or if the file descriptor is invalid.
 #[inline]
 pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize> {
-    let ret = unsafe { syscall3(SYS_READ as u64, fd, buf.as_mut_ptr() as u64, buf.len() as u64) };
+    let ret = unsafe {
+        syscall3(
+            SYS_READ as u64,
+            fd,
+            buf.as_mut_ptr() as u64,
+            buf.len() as u64,
+        )
+    };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
         Err(Error::from_code((-ret_i64) as i32))
@@ -110,10 +120,27 @@ pub fn mkdir(path: &[u8]) -> Result<()> {
 #[inline]
 pub fn stat(path: &[u8]) -> Result<Stat> {
     let mut stat_buf = Stat {
-        dev: 0, ino: 0, mode: 0, nlink: 0, uid: 0, gid: 0, rdev: 0,
-        size: 0, blksize: 0, blocks: 0, atime: 0, mtime: 0, ctime: 0,
+        dev: 0,
+        ino: 0,
+        mode: 0,
+        nlink: 0,
+        uid: 0,
+        gid: 0,
+        rdev: 0,
+        size: 0,
+        blksize: 0,
+        blocks: 0,
+        atime: 0,
+        mtime: 0,
+        ctime: 0,
     };
-    let ret = unsafe { syscall2(SYS_STAT as u64, path.as_ptr() as u64, &mut stat_buf as *mut Stat as u64) };
+    let ret = unsafe {
+        syscall2(
+            SYS_STAT as u64,
+            path.as_ptr() as u64,
+            &mut stat_buf as *mut Stat as u64,
+        )
+    };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
         Err(Error::from_code((-ret_i64) as i32))
@@ -127,7 +154,13 @@ pub fn stat(path: &[u8]) -> Result<Stat> {
 /// Returns an error if the system call fails.
 #[inline]
 pub fn rename(old_path: &[u8], new_path: &[u8]) -> Result<()> {
-    let ret = unsafe { syscall2(SYS_RENAME as u64, old_path.as_ptr() as u64, new_path.as_ptr() as u64) };
+    let ret = unsafe {
+        syscall2(
+            SYS_RENAME as u64,
+            old_path.as_ptr() as u64,
+            new_path.as_ptr() as u64,
+        )
+    };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
         Err(Error::from_code((-ret_i64) as i32))
@@ -197,7 +230,14 @@ pub fn getcwd(buf: &mut [u8]) -> Result<usize> {
 /// Returns an error if the system call fails.
 #[inline]
 pub fn mount(source: &[u8], target: &[u8], fstype: &[u8]) -> Result<()> {
-    let ret = unsafe { syscall3(SYS_MOUNT as u64, source.as_ptr() as u64, target.as_ptr() as u64, fstype.as_ptr() as u64) };
+    let ret = unsafe {
+        syscall3(
+            SYS_MOUNT as u64,
+            source.as_ptr() as u64,
+            target.as_ptr() as u64,
+            fstype.as_ptr() as u64,
+        )
+    };
     let ret_i64 = ret as i64;
     if ret_i64 < 0 {
         Err(Error::from_code((-ret_i64) as i32))

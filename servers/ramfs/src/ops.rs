@@ -13,22 +13,22 @@ pub fn parse_path(path: &[u8]) -> (&[u8], &[u8]) {
         end += 1;
     }
     let path = &path[..end];
-    
+
     if path.is_empty() || path[0] != b'/' {
         return (b"", b"");
     }
-    
+
     if path.len() == 1 {
         return (b"/", b"");
     }
-    
+
     let mut last_slash = 0;
     for i in 1..path.len() {
         if path[i] == b'/' {
             last_slash = i;
         }
     }
-    
+
     if last_slash == 0 {
         (&path[..1], &path[1..])
     } else {
