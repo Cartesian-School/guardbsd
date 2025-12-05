@@ -1,0 +1,19 @@
+[package]
+name = "guardzfs"
+version = "1.0.0"
+edition = "2021"
+authors = ["Cartesian School - Siergej Sobolewski"]
+license = "BSD-3-Clause"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "guardzfs"
+path = "src/main.rs"
+
+[dependencies]
+libgbsd = { path = "../../userland/libgbsd" }
+kernel_log = { path = "../../kernel/log" }
+disk = { path = "../../kernel/disk" }
+

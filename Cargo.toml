@@ -16,6 +16,7 @@ members = [
     "servers/vfs",
     "servers/ramfs",
     "servers/guardfs",
+    "servers/guardzfs",
     "servers/devd",
     "servers/netd",
     "servers/netsvc",
