@@ -13,6 +13,9 @@ static mut LINE_EDITING: [u8; 256] = [0; 256]; // Current line being edited
 static mut LINE_EDITING_LEN: usize = 0;
 static ECHO_ENABLED: AtomicBool = AtomicBool::new(true);
 
+// TTY control: foreground process group
+static mut FOREGROUND_PGID: usize = 1; // Default to init's pgid
+
 // Serial port for echo output
 const COM1: u16 = 0x3F8;
 
@@ -26,9 +29,36 @@ pub fn init() {
 /// - Buffers input until newline
 /// - Echoes characters
 /// - Handles backspace
+/// - Handles Ctrl-C and Ctrl-Z for job control
 pub fn handle_input_char(ch: u8) {
     unsafe {
         match ch {
+            3 => {
+                // Ctrl-C (ASCII 0x03): send SIGINT to foreground process group
+                serial_putc(b'^');
+                serial_putc(b'C');
+                serial_putc(b'\r');
+                serial_putc(b'\n');
+                
+                // Send SIGINT to foreground process group
+                send_signal_to_pgid(FOREGROUND_PGID, 2); // SIGINT = 2
+                
+                // Clear current line
+                LINE_EDITING_LEN = 0;
+            }
+            26 => {
+                // Ctrl-Z (ASCII 0x1A): send SIGTSTP to foreground process group
+                serial_putc(b'^');
+                serial_putc(b'Z');
+                serial_putc(b'\r');
+                serial_putc(b'\n');
+                
+                // Send SIGTSTP to foreground process group
+                send_signal_to_pgid(FOREGROUND_PGID, 20); // SIGTSTP = 20
+                
+                // Clear current line
+                LINE_EDITING_LEN = 0;
+            }
             b'\n' | b'\r' => {
                 // End of line - commit the line to the ring buffer
                 if LINE_EDITING_LEN > 0 {
@@ -141,5 +171,37 @@ unsafe fn inb(port: u16) -> u8 {
     #[cfg(target_arch = "x86_64")]
     core::arch::asm!("in al, dx", out("al") ret, in("dx") port);
     ret
+}
+
+/// Set foreground process group for console TTY
+pub fn set_foreground_pgid(pgid: usize) {
+    unsafe {
+        FOREGROUND_PGID = pgid;
+    }
+}
+
+/// Get foreground process group for console TTY
+pub fn get_foreground_pgid() -> usize {
+    unsafe { FOREGROUND_PGID }
+}
+
+/// Send signal to all processes in a process group
+/// Called from console interrupt handler (Ctrl-C, Ctrl-Z)
+fn send_signal_to_pgid(pgid: usize, sig: i32) {
+    // Access process table and send signal
+    extern "C" {
+        static mut PROCESS_TABLE: [Option<crate::process::types::Process>; 64];
+    }
+    
+    unsafe {
+        for slot in PROCESS_TABLE.iter_mut() {
+            if let Some(proc) = slot {
+                if proc.pgid == pgid && pgid != 1 {
+                    // Don't send signals to init's process group
+                    proc.pending_signals |= 1u64 << sig;
+                }
+            }
+        }
+    }
 }
 

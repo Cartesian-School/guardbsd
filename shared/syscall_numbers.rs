@@ -14,6 +14,9 @@ pub const SYS_WAIT: usize = 3;
 pub const SYS_GETPID: usize = 4;
 pub const SYS_KILL: usize = 5;
 pub const SYS_YIELD: usize = 6;
+pub const SYS_WAITPID: usize = 7;
+pub const SYS_SETPGID: usize = 8;
+pub const SYS_GETPGID: usize = 9;
 
 // I/O Syscalls
 pub const SYS_READ: usize = 10;
@@ -41,6 +44,8 @@ pub const SYS_IPC_RECV: usize = 32;
 
 // Console/TTY Syscalls
 pub const SYS_CONSOLE_READ: usize = 40;
+pub const SYS_TCSETPGRP: usize = 41;
+pub const SYS_TCGETPGRP: usize = 42;
 
 // Signal Syscalls
 pub const SYS_SIGNAL: usize = 40;

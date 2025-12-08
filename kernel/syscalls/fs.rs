@@ -375,3 +375,18 @@ pub fn sys_console_read(buf: *mut u8, len: usize) -> isize {
     }
 }
 
+/// Set foreground process group for TTY
+/// tcsetpgrp(fd, pgid)
+pub fn sys_tcsetpgrp(_fd: u32, pgid: usize) -> isize {
+    // For now, only support /dev/console (ignore fd)
+    crate::drivers::console::set_foreground_pgid(pgid);
+    0
+}
+
+/// Get foreground process group for TTY
+/// tcgetpgrp(fd)
+pub fn sys_tcgetpgrp(_fd: u32) -> isize {
+    // For now, only support /dev/console (ignore fd)
+    crate::drivers::console::get_foreground_pgid() as isize
+}
+

@@ -57,6 +57,13 @@ mod syscall {
             SYS_MOUNT => sys_mount(arg1 as *const u8, arg2 as *const u8, arg3 as *const u8),
             SYS_UMOUNT => sys_umount(arg1 as *const u8),
             SYS_CONSOLE_READ => crate::syscalls::fs::sys_console_read(arg1 as *mut u8, arg2),
+            SYS_TCSETPGRP => crate::syscalls::fs::sys_tcsetpgrp(arg1 as u32, arg2),
+            SYS_TCGETPGRP => crate::syscalls::fs::sys_tcgetpgrp(arg1 as u32),
+            
+            SYS_KILL => crate::syscalls::process_jobctl::sys_kill(arg1 as isize, arg2 as i32),
+            SYS_WAITPID => crate::syscalls::process_jobctl::sys_waitpid(arg1 as isize, arg2 as *mut i32, arg3 as u32),
+            SYS_SETPGID => crate::syscalls::process_jobctl::sys_setpgid(arg1, arg2),
+            SYS_GETPGID => crate::syscalls::process_jobctl::sys_getpgid(arg1),
             
             // Logging (still using local stubs)
             SYS_LOG_READ => ENOSYS,

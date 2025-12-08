@@ -23,11 +23,13 @@ pub struct Process {
     // Identity
     pub pid: Pid,
     pub parent: Option<Pid>,
+    pub pgid: Pid,  // Process group ID (for job control)
     pub children: [Option<Pid>; MAX_CHILDREN],
     pub child_count: usize,
     
     // State
     pub state: ProcessState,
+    pub stopped: bool,  // True if stopped by SIGTSTP/SIGSTOP
     pub exit_status: Option<i32>,
     
     // Memory layout
@@ -60,9 +62,11 @@ impl Process {
         Self {
             pid: 0,
             parent: None,
+            pgid: 0,
             children: [None; MAX_CHILDREN],
             child_count: 0,
             state: ProcessState::New,
+            stopped: false,
             exit_status: None,
             page_table: 0,
             entry: 0,
@@ -156,6 +160,8 @@ pub enum ProcessState {
     Blocked = 3,
     /// Sleeping (timer-based wait)
     Sleeping = 4,
+    /// Stopped by signal (SIGTSTP/SIGSTOP)
+    Stopped = 6,
     /// Exited, waiting to be reaped by parent
     Zombie = 5,
 }
