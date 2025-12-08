@@ -18,6 +18,7 @@ mod syscalls {
     pub const GBSD_SYS_PORT_CREATE: u64 = SYS_IPC_PORT_CREATE as u64;
     pub const GBSD_SYS_EXIT: u64 = SYS_EXIT as u64;
     pub const GBSD_SYS_EXEC: u64 = SYS_EXEC as u64;
+    pub const GBSD_SYS_FORK: u64 = SYS_FORK as u64;
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]
@@ -37,6 +38,21 @@ mod syscalls {
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]
+    pub fn fork() -> u64 {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_FORK,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        ret
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
     pub fn exec(path: &[u8]) -> u64 {
         let ret: u64;
         unsafe {
@@ -45,6 +61,21 @@ mod syscalls {
                 in("rax") GBSD_SYS_EXEC,
                 in("rdi") path.as_ptr() as u64,
                 lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        ret
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    pub fn fork() -> u64 {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "svc #0",
+                in("x8") GBSD_SYS_FORK,
+                lateout("x0") ret,
                 options(nostack)
             );
         }
@@ -157,14 +188,30 @@ fn startup_sequence() {
 fn start_servers() {
     // Start core system servers
     // Note: In microkernel architecture, these run as separate processes
-    // For now, just log that they would be started
-
-    // In a real implementation, these would be:
-    // exec(b"/servers/devd");
-    // exec(b"/servers/vfs");
-    // exec(b"/servers/ramfs");
-    // exec(b"/servers/netd");
-    // exec(b"/servers/netsvc");
+    
+    // Phase 1: Start RAMFS (must be first - provides storage backend)
+    let ramfs_pid = start_ramfs();
+    if ramfs_pid == 0 {
+        // RAMFS failed to start - system cannot function
+        // For now, continue anyway (servers may already be loaded)
+        return;
+    }
+    
+    // Wait for RAMFS to initialize (simple delay)
+    wait_for_server_ready();
+    
+    // Phase 2: Start VFS (depends on RAMFS)
+    let vfs_pid = start_vfs();
+    if vfs_pid == 0 {
+        // VFS failed to start - system can still work with direct kernel paths
+        return;
+    }
+    
+    // Wait for VFS to mount RAMFS
+    wait_for_server_ready();
+    
+    // Phase 3: Start device server (optional)
+    // let devd_pid = start_devd();
 }
 
 fn start_logd() {
@@ -203,6 +250,54 @@ fn start_shell() {
         // Shell failed to start - log error but don't exit
         // System continues running without interactive shell
         return;
+    }
+}
+
+fn start_ramfs() -> u64 {
+    // Fork and exec RAMFS server
+    let pid = syscalls::fork();
+    if pid == 0 {
+        // Child process - exec ramfs
+        let path = b"/servers/ramfs\0";
+        let ret = syscalls::exec(path);
+        if ret != 0 {
+            // Exec failed - exit child
+            syscalls::exit(1);
+        }
+    }
+    // Parent returns PID of child (or 0 on fork failure)
+    pid
+}
+
+fn start_vfs() -> u64 {
+    // Fork and exec VFS server
+    let pid = syscalls::fork();
+    if pid == 0 {
+        // Child process - exec vfs
+        let path = b"/servers/vfs\0";
+        let ret = syscalls::exec(path);
+        if ret != 0 {
+            // Exec failed - exit child
+            syscalls::exit(1);
+        }
+    }
+    // Parent returns PID of child (or 0 on fork failure)
+    pid
+}
+
+fn wait_for_server_ready() {
+    // Simple delay to let servers initialize
+    // In production, this would use IPC handshake
+    for _ in 0..10000 {
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            core::arch::asm!("pause", options(nomem, nostack));
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        unsafe {
+            core::arch::asm!("yield", options(nomem, nostack));
+        }
     }
 }
 
