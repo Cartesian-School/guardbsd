@@ -21,6 +21,9 @@ mod syscalls {
     pub const GBSD_SYS_EXIT: u64 = SYS_EXIT as u64;
     pub const GBSD_SYS_EXEC: u64 = SYS_EXEC as u64;
     pub const GBSD_SYS_FORK: u64 = SYS_FORK as u64;
+    pub const GBSD_SYS_OPEN: u64 = SYS_OPEN as u64;
+    pub const GBSD_SYS_DUP2: u64 = SYS_DUP2 as u64;
+    pub const GBSD_SYS_CLOSE: u64 = SYS_CLOSE as u64;
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]
@@ -206,6 +209,68 @@ mod syscalls {
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]
+    pub fn open(path: &[u8], flags: u64) -> Result<u64, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_OPEN,
+                in("rdi") path.as_ptr() as u64,
+                in("rsi") flags,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret)
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn dup2(oldfd: u64, newfd: u64) -> Result<u64, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_DUP2,
+                in("rdi") oldfd,
+                in("rsi") newfd,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret)
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn close(fd: u64) -> Result<(), ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_CLOSE,
+                in("rdi") fd,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
     pub fn exit(code: u64) -> ! {
         unsafe {
             core::arch::asm!(
@@ -214,6 +279,68 @@ mod syscalls {
                 in("rdi") code,
                 options(noreturn)
             );
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    pub fn open(path: &[u8], flags: u64) -> Result<u64, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "svc #0",
+                in("x8") GBSD_SYS_OPEN,
+                in("x0") path.as_ptr() as u64,
+                in("x1") flags,
+                lateout("x0") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret)
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    pub fn dup2(oldfd: u64, newfd: u64) -> Result<u64, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "svc #0",
+                in("x8") GBSD_SYS_DUP2,
+                in("x0") oldfd,
+                in("x1") newfd,
+                lateout("x0") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret)
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    pub fn close(fd: u64) -> Result<(), ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "svc #0",
+                in("x8") GBSD_SYS_CLOSE,
+                in("x0") fd,
+                lateout("x0") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(())
         }
     }
 
@@ -312,6 +439,9 @@ fn start_servers() {
     
     // Phase 4: Setup /dev directory and device nodes
     setup_dev_nodes();
+    
+    // Phase 5: Wire /dev/console to stdio (fd 0/1/2)
+    setup_console_stdio();
 }
 
 fn start_logd() {
@@ -495,6 +625,40 @@ fn create_device_node_in_ramfs(ramfs_port: u64, path: &[u8], dev_id: u32) {
         let mut resp_buf = [0u8; 512];
         let _ = syscalls::port_receive(ramfs_port, resp_buf.as_mut_ptr(), 512);
         // Ignore errors for now
+    }
+}
+
+fn setup_console_stdio() {
+    // Wire /dev/console to stdio (fd 0/1/2)
+    // This makes console the standard input/output/error for init and all child processes
+    
+    const O_RDWR: u64 = 0x2;
+    let console_path = b"/dev/console\0";
+    
+    // Open /dev/console
+    match syscalls::open(console_path, O_RDWR) {
+        Ok(console_fd) => {
+            // Duplicate console_fd to stdin (0), stdout (1), stderr (2)
+            // Note: Current sys_close doesn't allow closing 0/1/2, so we use dup2 directly
+            
+            let _ = syscalls::dup2(console_fd, 0); // stdin
+            let _ = syscalls::dup2(console_fd, 1); // stdout
+            let _ = syscalls::dup2(console_fd, 2); // stderr
+            
+            // If console_fd is > 2, close the original to avoid fd leak
+            if console_fd > 2 {
+                let _ = syscalls::close(console_fd);
+            }
+            
+            // Now fd 0/1/2 point to /dev/console
+            // All child processes (logd, gsh) will inherit these fds
+        }
+        Err(_) => {
+            // /dev/console open failed
+            // Fall back to existing kernel console behavior
+            // In production, this would log to serial console directly
+            // For now, just continue - stdio will use kernel defaults
+        }
     }
 }
 

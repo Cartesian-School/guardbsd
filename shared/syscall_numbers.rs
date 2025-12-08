@@ -20,6 +20,8 @@ pub const SYS_READ: usize = 10;
 pub const SYS_WRITE: usize = 11;
 pub const SYS_OPEN: usize = 12;
 pub const SYS_CLOSE: usize = 13;
+pub const SYS_DUP: usize = 14;
+pub const SYS_DUP2: usize = 15;
 
 // Filesystem Syscalls
 pub const SYS_STAT: usize = 20;

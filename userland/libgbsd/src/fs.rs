@@ -6,7 +6,7 @@
 
 use crate::error::{Error, Result};
 use crate::syscall::{
-    syscall1, syscall2, syscall3, SYS_CHDIR, SYS_CLOSE, SYS_GETCWD, SYS_MKDIR, SYS_MOUNT, SYS_OPEN,
+    syscall1, syscall2, syscall3, SYS_CHDIR, SYS_CLOSE, SYS_DUP, SYS_DUP2, SYS_GETCWD, SYS_MKDIR, SYS_MOUNT, SYS_OPEN,
     SYS_READ, SYS_RENAME, SYS_STAT, SYS_SYNC, SYS_UMOUNT, SYS_UNLINK, SYS_WRITE,
 };
 
@@ -97,6 +97,38 @@ pub fn write(fd: Fd, buf: &[u8]) -> Result<usize> {
         Err(Error::from_code((-ret_i64) as i32))
     } else {
         Ok(usize::try_from(ret).unwrap_or(0))
+    }
+}
+
+/// Duplicate a file descriptor
+///
+/// # Errors
+///
+/// Returns an error if the dup operation fails
+#[inline]
+pub fn dup(oldfd: Fd) -> Result<Fd> {
+    let ret = unsafe { syscall1(SYS_DUP as u64, oldfd) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(Error::from_code((-ret_i64) as i32))
+    } else {
+        Ok(ret as Fd)
+    }
+}
+
+/// Duplicate a file descriptor to a specific number
+///
+/// # Errors
+///
+/// Returns an error if the dup2 operation fails
+#[inline]
+pub fn dup2(oldfd: Fd, newfd: Fd) -> Result<Fd> {
+    let ret = unsafe { syscall2(SYS_DUP2 as u64, oldfd, newfd) };
+    let ret_i64 = ret as i64;
+    if ret_i64 < 0 {
+        Err(Error::from_code((-ret_i64) as i32))
+    } else {
+        Ok(ret as Fd)
     }
 }
 

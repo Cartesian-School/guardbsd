@@ -261,6 +261,82 @@ pub fn sys_close(fd: u32) -> isize {
     }
 }
 
+/// Duplicate a file descriptor
+/// Returns new fd on success, negative error on failure
+pub fn sys_dup(oldfd: usize) -> isize {
+    unsafe {
+        let pid = match get_current_pid() {
+            Some(p) => p,
+            None => return EINVAL,
+        };
+        
+        let proc = match find_process_mut(pid) {
+            Some(p) => p,
+            None => return EINVAL,
+        };
+        
+        // Validate oldfd
+        if oldfd >= MAX_FD_PER_PROCESS || proc.fd_table[oldfd].is_none() {
+            return EBADF;
+        }
+        
+        // Clone the file descriptor
+        let fd_entry = proc.fd_table[oldfd].unwrap();
+        
+        // Find lowest available fd
+        for newfd in 0..MAX_FD_PER_PROCESS {
+            if proc.fd_table[newfd].is_none() {
+                proc.fd_table[newfd] = Some(fd_entry);
+                return newfd as isize;
+            }
+        }
+        
+        EMFILE  // No free file descriptors
+    }
+}
+
+/// Duplicate a file descriptor to a specific fd number
+/// Returns newfd on success, negative error on failure
+pub fn sys_dup2(oldfd: usize, newfd: usize) -> isize {
+    unsafe {
+        let pid = match get_current_pid() {
+            Some(p) => p,
+            None => return EINVAL,
+        };
+        
+        let proc = match find_process_mut(pid) {
+            Some(p) => p,
+            None => return EINVAL,
+        };
+        
+        // Validate oldfd
+        if oldfd >= MAX_FD_PER_PROCESS || proc.fd_table[oldfd].is_none() {
+            return EBADF;
+        }
+        
+        // Validate newfd range
+        if newfd >= MAX_FD_PER_PROCESS {
+            return EBADF;
+        }
+        
+        // If oldfd == newfd, just return newfd (already duplicated)
+        if oldfd == newfd {
+            return newfd as isize;
+        }
+        
+        // Close newfd if it's open
+        if proc.fd_table[newfd].is_some() {
+            proc.fd_table[newfd] = None;
+        }
+        
+        // Clone the file descriptor
+        let fd_entry = proc.fd_table[oldfd].unwrap();
+        proc.fd_table[newfd] = Some(fd_entry);
+        
+        newfd as isize
+    }
+}
+
 // Serial port helper (for stdout/stderr)
 const COM1: u16 = 0x3F8;
 

@@ -20,6 +20,8 @@ pub const SYS_READ_U64: u64 = SYS_READ as u64;
 pub const SYS_WRITE_U64: u64 = SYS_WRITE as u64;
 pub const SYS_OPEN_U64: u64 = SYS_OPEN as u64;
 pub const SYS_CLOSE_U64: u64 = SYS_CLOSE as u64;
+pub const SYS_DUP_U64: u64 = SYS_DUP as u64;
+pub const SYS_DUP2_U64: u64 = SYS_DUP2 as u64;
 
 use crate::error::Result;
 
