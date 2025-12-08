@@ -313,9 +313,13 @@ Copyright (c) 2025 Siergej Sobolewski, Cartesian School
 
 ---
 
-<p align="center">
-  <strong>GuardBSD - Security. Minimalism. The Future.</strong>
-</p>
-```
+## Status
 
-<br>
+**Version:** 1.0.0  
+**Status:** Active Development  
+**License:** BSD 3-Clause  
+**Platforms:** x86_64, AArch64
+
+---
+
+**GuardBSD - Secure, Fast, Modern**
