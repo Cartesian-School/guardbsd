@@ -16,6 +16,8 @@ mod syscalls {
 
     // Compatibility aliases for this module
     pub const GBSD_SYS_PORT_CREATE: u64 = SYS_IPC_PORT_CREATE as u64;
+    pub const GBSD_SYS_PORT_SEND: u64 = SYS_IPC_SEND as u64;
+    pub const GBSD_SYS_PORT_RECEIVE: u64 = SYS_IPC_RECV as u64;
     pub const GBSD_SYS_EXIT: u64 = SYS_EXIT as u64;
     pub const GBSD_SYS_EXEC: u64 = SYS_EXEC as u64;
     pub const GBSD_SYS_FORK: u64 = SYS_FORK as u64;
@@ -34,6 +36,50 @@ mod syscalls {
             );
         }
         ret
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn port_send(port: u64, buffer: *const u8, length: usize) -> Result<(), ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_PORT_SEND,
+                in("rdi") port,
+                in("rsi") buffer as u64,
+                in("rdx") length as u64,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn port_receive(port: u64, buffer: *mut u8, length: usize) -> Result<u64, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_PORT_RECEIVE,
+                in("rdi") port,
+                in("rsi") buffer as u64,
+                in("rdx") length as u64,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret)
+        }
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -96,6 +142,50 @@ mod syscalls {
             );
         }
         ret
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    pub fn port_send(port: u64, buffer: *const u8, length: usize) -> Result<(), ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "svc #0",
+                in("x8") GBSD_SYS_PORT_SEND,
+                in("x0") port,
+                in("x1") buffer as u64,
+                in("x2") length as u64,
+                lateout("x0") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    pub fn port_receive(port: u64, buffer: *mut u8, length: usize) -> Result<u64, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "svc #0",
+                in("x8") GBSD_SYS_PORT_RECEIVE,
+                in("x0") port,
+                in("x1") buffer as u64,
+                in("x2") length as u64,
+                lateout("x0") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret)
+        }
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -219,6 +309,9 @@ fn start_servers() {
     
     // Wait for devd to initialize
     wait_for_server_ready();
+    
+    // Phase 4: Setup /dev directory and device nodes
+    setup_dev_nodes();
 }
 
 fn start_logd() {
@@ -321,6 +414,87 @@ fn wait_for_server_ready() {
         unsafe {
             core::arch::asm!("yield", options(nomem, nostack));
         }
+    }
+}
+
+fn setup_dev_nodes() {
+    // Create /dev directory and populate with device nodes
+    // This function uses direct IPC to RAMFS and devd servers
+    
+    const RAMFS_PORT: u64 = 1001;
+    const DEVD_PORT: u64 = 1100;
+    
+    // Step 1: Create /dev directory via RAMFS
+    // Op 6 = mkdir
+    let mut req_buf = [0u8; 512];
+    req_buf[0..4].copy_from_slice(&6u32.to_le_bytes()); // mkdir op
+    req_buf[4..8].copy_from_slice(&0u32.to_le_bytes()); // reply port (not used in simplified impl)
+    
+    // Path "/dev"
+    let dev_path = b"/dev\0";
+    req_buf[8..8 + dev_path.len()].copy_from_slice(dev_path);
+    
+    // Send mkdir request to RAMFS
+    if syscalls::port_send(RAMFS_PORT, req_buf.as_ptr(), 512).is_ok() {
+        let mut resp_buf = [0u8; 512];
+        let _ = syscalls::port_receive(RAMFS_PORT, resp_buf.as_mut_ptr(), 512);
+        // Ignore errors - /dev might already exist
+    }
+    
+    // Step 2: Register devices with devd and create nodes
+    
+    // Device 1: /dev/null (character device 1,3)
+    if let Ok(null_dev_id) = register_device_with_devd(DEVD_PORT, 0, 1, 3) {
+        create_device_node_in_ramfs(RAMFS_PORT, b"/dev/null\0", null_dev_id);
+    }
+    
+    // Device 2: /dev/console (character device 1,0 - already pre-registered as device 1)
+    // Use the pre-registered console device (ID 1)
+    create_device_node_in_ramfs(RAMFS_PORT, b"/dev/console\0", 1);
+    
+    // Device 3: /dev/tty0 (alias to console, character device 4,0)
+    if let Ok(tty0_dev_id) = register_device_with_devd(DEVD_PORT, 0, 4, 0) {
+        create_device_node_in_ramfs(RAMFS_PORT, b"/dev/tty0\0", tty0_dev_id);
+    }
+}
+
+fn register_device_with_devd(devd_port: u64, dev_type: u32, major: u16, minor: u16) -> Result<u32, ()> {
+    // Register device via IPC to devd
+    // Format: DevRequest [op:u32][dev_id:u32][major:u16][minor:u16][flags:u32]
+    let mut req_buf = [0u8; 16];
+    req_buf[0..4].copy_from_slice(&1u32.to_le_bytes()); // op=1 (register)
+    req_buf[4..8].copy_from_slice(&0u32.to_le_bytes()); // dev_id (unused for register)
+    req_buf[8..10].copy_from_slice(&major.to_le_bytes());
+    req_buf[10..12].copy_from_slice(&minor.to_le_bytes());
+    req_buf[12..16].copy_from_slice(&dev_type.to_le_bytes()); // flags = device type
+    
+    if syscalls::port_send(devd_port, req_buf.as_ptr(), 16).is_ok() {
+        let mut resp_buf = [0u8; 8];
+        if syscalls::port_receive(devd_port, resp_buf.as_mut_ptr(), 8).is_ok() {
+            let result = i64::from_le_bytes(resp_buf);
+            if result >= 0 {
+                return Ok(result as u32);
+            }
+        }
+    }
+    Err(())
+}
+
+fn create_device_node_in_ramfs(ramfs_port: u64, path: &[u8], dev_id: u32) {
+    // Create device node via RAMFS mknod operation
+    // Op 9 = mknod, Format: [op:u32][reply_port:u32][path:256][dev_id:u32]
+    let mut req_buf = [0u8; 512];
+    req_buf[0..4].copy_from_slice(&9u32.to_le_bytes()); // mknod op
+    req_buf[4..8].copy_from_slice(&0u32.to_le_bytes()); // reply port
+    
+    let path_len = path.iter().position(|&c| c == 0).unwrap_or(path.len()).min(256);
+    req_buf[8..8 + path_len].copy_from_slice(&path[..path_len]);
+    req_buf[264..268].copy_from_slice(&dev_id.to_le_bytes());
+    
+    if syscalls::port_send(ramfs_port, req_buf.as_ptr(), 512).is_ok() {
+        let mut resp_buf = [0u8; 512];
+        let _ = syscalls::port_receive(ramfs_port, resp_buf.as_mut_ptr(), 512);
+        // Ignore errors for now
     }
 }
 

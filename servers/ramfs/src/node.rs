@@ -8,6 +8,7 @@
 pub enum NodeType {
     File,
     Directory,
+    Device,
 }
 
 #[derive(Copy, Clone)]
@@ -18,6 +19,7 @@ pub struct Node {
     pub data: [u8; 4096],
     pub size: usize,
     pub parent: u32,
+    pub dev_id: u32,  // Device ID for device nodes (from devd)
 }
 
 impl Node {
@@ -29,6 +31,7 @@ impl Node {
             data: [0; 4096],
             size: 0,
             parent: 0,
+            dev_id: 0,
         }
     }
 
@@ -72,6 +75,21 @@ impl RamFs {
         self.nodes[idx as usize].set_name(name);
         self.nodes[idx as usize].node_type = ntype;
         self.nodes[idx as usize].parent = parent;
+        self.nodes[idx as usize].dev_id = 0;
+        self.count += 1;
+        Some(idx)
+    }
+
+    pub fn create_device(&mut self, parent: u32, name: &[u8], dev_id: u32) -> Option<u32> {
+        if self.count >= 256 {
+            return None;
+        }
+        let idx = self.count as u32;
+        self.nodes[idx as usize].set_name(name);
+        self.nodes[idx as usize].node_type = NodeType::Device;
+        self.nodes[idx as usize].parent = parent;
+        self.nodes[idx as usize].dev_id = dev_id;
+        self.nodes[idx as usize].size = 0;
         self.count += 1;
         Some(idx)
     }

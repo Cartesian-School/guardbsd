@@ -196,7 +196,17 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
             ]);
 
             if result >= 0 {
-                VfsResponse::ok(result as u64)
+                // Check if this is a device node by checking path prefix
+                let path_str = core::str::from_utf8(&req.path[..path_len]).unwrap_or("");
+                if path_str.starts_with("/dev/") && matches!(req.op, VfsOp::Open) {
+                    // This is a device node - result is node index
+                    // We need to query RAMFS for the dev_id
+                    // For now, return a special marker that indicates device
+                    // The node index will encode the device info
+                    VfsResponse::ok(result as u64)
+                } else {
+                    VfsResponse::ok(result as u64)
+                }
             } else {
                 VfsResponse::err(-result)
             }
@@ -206,6 +216,47 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
         }
     } else {
         klog_error!("vfs", "failed to send request to RAMFS");
+        VfsResponse::err(5) // EIO
+    }
+}
+
+// Helper to create device node in RAMFS
+pub fn create_device_node(ramfs_port: usize, vfs_port: usize, path: &[u8], dev_id: u32) -> VfsResponse {
+    use gbsd::*;
+
+    if ramfs_port == 0 {
+        return VfsResponse::err(19); // ENODEV
+    }
+
+    // Prepare mknod IPC message to RAMFS
+    // Op 9 = mknod, Format: [op:u32][reply_port:u32][path:256][dev_id:u32]
+    let mut ipc_buf = [0u8; 512];
+
+    ipc_buf[0..4].copy_from_slice(&9u32.to_le_bytes()); // mknod op
+    ipc_buf[4..8].copy_from_slice(&(vfs_port as u32).to_le_bytes());
+
+    let path_len = path.iter().position(|&c| c == 0).unwrap_or(path.len()).min(256);
+    ipc_buf[8..8 + path_len].copy_from_slice(&path[..path_len]);
+
+    ipc_buf[264..268].copy_from_slice(&dev_id.to_le_bytes());
+
+    if port_send(ramfs_port as u64, ipc_buf.as_ptr(), 512).is_ok() {
+        let mut resp_buf = [0u8; 512];
+        if port_receive(vfs_port as u64, resp_buf.as_mut_ptr(), 512).is_ok() {
+            let result = i64::from_le_bytes([
+                resp_buf[0], resp_buf[1], resp_buf[2], resp_buf[3],
+                resp_buf[4], resp_buf[5], resp_buf[6], resp_buf[7],
+            ]);
+
+            if result >= 0 {
+                VfsResponse::ok(result as u64)
+            } else {
+                VfsResponse::err(-result)
+            }
+        } else {
+            VfsResponse::err(5) // EIO
+        }
+    } else {
         VfsResponse::err(5) // EIO
     }
 }

@@ -67,31 +67,52 @@ pub fn open(fs: &mut RamFs, path: &[u8], flags: u32) -> i64 {
 
 pub fn read(fs: &mut RamFs, fd: u32, buf: &mut [u8]) -> i64 {
     if let Some(node) = fs.get(fd) {
-        if node.node_type != NodeType::File {
-            return -21; // EISDIR
+        match node.node_type {
+            NodeType::File => {
+                let len = node.size.min(buf.len());
+                buf[..len].copy_from_slice(&node.data[..len]);
+                klog_info!("ramfs", "read {} bytes from fd={}", len, fd);
+                len as i64
+            }
+            NodeType::Device => {
+                // Device nodes should be handled by VFS → devd
+                // RAMFS just returns the dev_id as metadata
+                klog_warn!("ramfs", "device node read should go through VFS");
+                -22 // EINVAL
+            }
+            NodeType::Directory => {
+                -21 // EISDIR
+            }
         }
-        let len = node.size.min(buf.len());
-        buf[..len].copy_from_slice(&node.data[..len]);
-        klog_info!("ramfs", "read {} bytes from fd={}", len, fd);
-        return len as i64;
+    } else {
+        klog_warn!("ramfs", "invalid file descriptor {}", fd);
+        -9 // EBADF
     }
-    klog_warn!("ramfs", "invalid file descriptor {}", fd);
-    -9 // EBADF
 }
 
 pub fn write(fs: &mut RamFs, fd: u32, buf: &[u8]) -> i64 {
     if let Some(node) = fs.get(fd) {
-        if node.node_type != NodeType::File {
-            return -21; // EISDIR
+        match node.node_type {
+            NodeType::File => {
+                let len = buf.len().min(4096);
+                node.data[..len].copy_from_slice(&buf[..len]);
+                node.size = len;
+                klog_info!("ramfs", "write {} bytes to fd={}", len, fd);
+                len as i64
+            }
+            NodeType::Device => {
+                // Device nodes should be handled by VFS → devd
+                klog_warn!("ramfs", "device node write should go through VFS");
+                -22 // EINVAL
+            }
+            NodeType::Directory => {
+                -21 // EISDIR
+            }
         }
-        let len = buf.len().min(4096);
-        node.data[..len].copy_from_slice(&buf[..len]);
-        node.size = len;
-        klog_info!("ramfs", "write {} bytes to fd={}", len, fd);
-        return len as i64;
+    } else {
+        klog_warn!("ramfs", "invalid file descriptor {}", fd);
+        -9 // EBADF
     }
-    klog_warn!("ramfs", "invalid file descriptor {}", fd);
-    -9 // EBADF
 }
 
 pub fn mkdir(fs: &mut RamFs, path: &[u8]) -> i64 {
@@ -134,4 +155,26 @@ pub fn unlink(fs: &mut RamFs, path: &[u8]) -> i64 {
 
     klog_warn!("ramfs", "file '{}' not found", name_str);
     -2 // ENOENT
+}
+
+pub fn mknod(fs: &mut RamFs, path: &[u8], dev_id: u32) -> i64 {
+    let (_, name) = parse_path(path);
+
+    if name.is_empty() {
+        return -22; // EINVAL
+    }
+
+    let name_str = core::str::from_utf8(name).unwrap_or("<invalid>");
+
+    if fs.find(0, name).is_some() {
+        return -17; // EEXIST
+    }
+
+    if let Some(idx) = fs.create_device(0, name, dev_id) {
+        klog_info!("ramfs", "create device node '{}' dev_id={}", name_str, dev_id);
+        return idx as i64;
+    }
+
+    klog_error!("ramfs", "ramfs out of space (requested=1)");
+    -28 // ENOSPC
 }

@@ -110,6 +110,16 @@ fn handle_request(op: u32, data: &[u8]) -> i64 {
                     -22 // EINVAL
                 }
             }
+            9 => {
+                // Mknod (create device node)
+                // Format: [path:256][dev_id:u32]
+                if data.len() >= 260 {
+                    let dev_id = u32::from_le_bytes([data[256], data[257], data[258], data[259]]);
+                    ops::mknod(&mut RAMFS, &data[..256], dev_id)
+                } else {
+                    -22 // EINVAL
+                }
+            }
             _ => -38, // ENOSYS
         }
     }
