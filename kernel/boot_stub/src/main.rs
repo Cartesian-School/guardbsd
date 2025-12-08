@@ -41,10 +41,10 @@ mod syscall {
             ),
             
             // File operations (Day 31: Full VFS/RAMFS integration via IPC)
-            SYS_WRITE => sys_write(arg1, arg2 as *const u8, arg3),
-            SYS_READ => sys_read(arg1, arg2 as *mut u8, arg3),
-            SYS_OPEN => sys_open(arg1 as *const u8, arg2),
-            SYS_CLOSE => sys_close(arg1),
+            SYS_WRITE => crate::syscalls::fs::sys_write(arg1 as u32, arg2 as *const u8, arg3),
+            SYS_READ => crate::syscalls::fs::sys_read(arg1 as u32, arg2 as *mut u8, arg3),
+            SYS_OPEN => crate::syscalls::fs::sys_open(arg1 as *const u8, arg2 as u32),
+            SYS_CLOSE => crate::syscalls::fs::sys_close(arg1 as u32),
             SYS_STAT => sys_stat(arg1 as *const u8, arg2 as *mut u8),
             SYS_MKDIR => sys_mkdir(arg1 as *const u8, arg2),
             SYS_UNLINK => sys_unlink(arg1 as *const u8),

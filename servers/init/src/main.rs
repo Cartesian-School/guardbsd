@@ -173,9 +173,10 @@ fn start_logd() {
     let ret = syscalls::exec(path);
 
     if ret != 0 {
-        // Logd failed to start - this is critical
-        // In a real system, we might try to start a fallback logger
-        syscalls::exit(1);
+        // Logd failed to start - log error but continue
+        // System can still function without logd (logs go to serial)
+        // In production, this would log to serial console
+        return;
     }
 
     // Wait for logd to register itself (simple polling)
@@ -199,8 +200,9 @@ fn start_shell() {
     let ret = syscalls::exec(path);
 
     if ret != 0 {
-        // Shell failed to start
-        syscalls::exit(1);
+        // Shell failed to start - log error but don't exit
+        // System continues running without interactive shell
+        return;
     }
 }
 

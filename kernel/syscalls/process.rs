@@ -593,18 +593,11 @@ pub fn sys_exec(path: *const u8, _argv: *const *const u8) -> isize {
         // Day 18: ELF Parsing
         
         // Step 4: Read ELF file from VFS (Day 17)
-        // TODO: This needs proper VFS integration
-        // For now, this is a stub that will return error
-        // In production: let elf_data = vfs::read_file(path_str)?;
+        // TODO: Refactor to use VFS layer when available (Issue: sys_exec VFS integration)
+        // For now, read directly from ISO9660 filesystem
         
-        // Since we don't have VFS yet, return error for now
-        // When VFS is ready, this will actually load the file
-        // For testing purposes, we return -1 (ENOENT: file not found)
-        
-        // Uncomment below when VFS is ready:
-        /*
         // Step 5: Read ELF data
-        let elf_data = match crate::fs::read_file(path_str) {
+        let elf_data = match crate::fs::iso9660::read_file(path_str) {
             Some(data) => data,
             None => return -1, // ENOENT: File not found
         };
@@ -815,10 +808,8 @@ pub fn sys_exec(path: *const u8, _argv: *const *const u8) -> isize {
         // The process continues from the new entry point
         // But since we're updating the context, we return 0
         // The actual jump happens when scheduler resumes this thread
-        */
         
-        // TEMPORARY: Return error until VFS is ready
-        -1 // ENOSYS: VFS integration needed
+        0 // Success
     }
 }
 
