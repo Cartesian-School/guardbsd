@@ -1,16 +1,21 @@
 // userland/libgbsd/src/device.rs
-// Device management syscall wrappers
+// Device management IPC wrappers
 // ============================================================================
 // Copyright (c) 2025 Cartesian School - Siergej Sobolewski
 // SPDX-License-Identifier: BSD-3-Clause
 
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::ipc::{port_send, port_receive};
 
 pub type DevId = u32;
 
 pub const DEV_CHAR: u32 = 0;
 pub const DEV_BLOCK: u32 = 1;
 pub const DEV_NET: u32 = 2;
+
+// Fixed IPC port for devd server
+// TODO: Replace with service discovery in future
+pub const DEVD_PORT: u64 = 1100;
 
 #[repr(C)]
 pub struct DevRequest {
@@ -43,48 +48,103 @@ impl DevRequest {
             )
         }
     }
+
+    fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+        bytes[0..4].copy_from_slice(&self.op.to_le_bytes());
+        bytes[4..8].copy_from_slice(&self.dev_id.to_le_bytes());
+        bytes[8..10].copy_from_slice(&self.major.to_le_bytes());
+        bytes[10..12].copy_from_slice(&self.minor.to_le_bytes());
+        bytes[12..16].copy_from_slice(&self.flags.to_le_bytes());
+        bytes
+    }
+}
+
+// Helper function to send request and receive response from devd
+fn devd_call(req: &DevRequest) -> Result<DevId> {
+    let req_bytes = req.to_bytes();
+    
+    // Send request to devd
+    port_send(DEVD_PORT, req_bytes.as_ptr(), req_bytes.len())?;
+    
+    // Receive response
+    let mut resp_buf = [0u8; 8];
+    port_receive(DEVD_PORT, resp_buf.as_mut_ptr(), resp_buf.len())?;
+    
+    // Parse response (i64 result)
+    let result = i64::from_le_bytes(resp_buf);
+    
+    if result < 0 {
+        Err(Error::from_code((-result) as i32))
+    } else {
+        Ok(result as DevId)
+    }
 }
 
 /// # Errors
 ///
-/// Currently always succeeds, but may return an error when IPC is implemented.
+/// Returns error if device registration fails or devd is not available
 #[inline]
 pub fn dev_register(dev_type: u32, major: u16, minor: u16) -> Result<DevId> {
     let req = DevRequest::new(1, 0, major, minor, dev_type);
-    // Future: IPC call to devd
-    let _ = req;
-    Ok(0)
+    devd_call(&req)
 }
 
 /// # Errors
 ///
-/// Currently always succeeds, but may return an error when IPC is implemented.
+/// Returns error if device unregistration fails or devd is not available
 #[inline]
 pub fn dev_unregister(dev_id: DevId) -> Result<()> {
     let req = DevRequest::new(2, dev_id, 0, 0, 0);
-    // Future: IPC call to devd
-    let _ = req;
+    devd_call(&req)?;
     Ok(())
 }
 
 /// # Errors
 ///
-/// Currently always succeeds, but may return an error when IPC is implemented.
+/// Returns error if device open fails or devd is not available
 #[inline]
 pub fn dev_open(dev_id: DevId) -> Result<DevId> {
     let req = DevRequest::new(3, dev_id, 0, 0, 0);
-    // Future: IPC call to devd
-    let _ = req;
-    Ok(dev_id)
+    devd_call(&req)
 }
 
 /// # Errors
 ///
-/// Currently always succeeds, but may return an error when IPC is implemented.
+/// Returns error if device close fails or devd is not available
 #[inline]
 pub fn dev_close(dev_id: DevId) -> Result<()> {
     let req = DevRequest::new(4, dev_id, 0, 0, 0);
-    // Future: IPC call to devd
-    let _ = req;
+    devd_call(&req)?;
     Ok(())
+}
+
+/// # Errors
+///
+/// Returns error if device read fails or devd is not available
+#[inline]
+pub fn dev_read(dev_id: DevId, _buffer: &mut [u8]) -> Result<usize> {
+    let req = DevRequest::new(5, dev_id, 0, 0, 0);
+    let bytes_read = devd_call(&req)?;
+    Ok(bytes_read as usize)
+}
+
+/// # Errors
+///
+/// Returns error if device write fails or devd is not available
+#[inline]
+pub fn dev_write(dev_id: DevId, buffer: &[u8]) -> Result<usize> {
+    let req = DevRequest::new(6, dev_id, 0, 0, buffer.len() as u32);
+    let bytes_written = devd_call(&req)?;
+    Ok(bytes_written as usize)
+}
+
+/// # Errors
+///
+/// Returns error if ioctl fails or devd is not available
+#[inline]
+pub fn dev_ioctl(dev_id: DevId, cmd: u32, arg: u64) -> Result<u64> {
+    let req = DevRequest::new(7, dev_id, (cmd >> 16) as u16, cmd as u16, arg as u32);
+    let result = devd_call(&req)?;
+    Ok(result as u64)
 }

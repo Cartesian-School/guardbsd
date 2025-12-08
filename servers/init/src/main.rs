@@ -210,8 +210,15 @@ fn start_servers() {
     // Wait for VFS to mount RAMFS
     wait_for_server_ready();
     
-    // Phase 3: Start device server (optional)
-    // let devd_pid = start_devd();
+    // Phase 3: Start device server (for device registration and management)
+    let devd_pid = start_devd();
+    if devd_pid == 0 {
+        // devd failed to start - system can work without it but devices won't be managed
+        return;
+    }
+    
+    // Wait for devd to initialize
+    wait_for_server_ready();
 }
 
 fn start_logd() {
@@ -275,6 +282,22 @@ fn start_vfs() -> u64 {
     if pid == 0 {
         // Child process - exec vfs
         let path = b"/servers/vfs\0";
+        let ret = syscalls::exec(path);
+        if ret != 0 {
+            // Exec failed - exit child
+            syscalls::exit(1);
+        }
+    }
+    // Parent returns PID of child (or 0 on fork failure)
+    pid
+}
+
+fn start_devd() -> u64 {
+    // Fork and exec device daemon
+    let pid = syscalls::fork();
+    if pid == 0 {
+        // Child process - exec devd
+        let path = b"/servers/devd\0";
         let ret = syscalls::exec(path);
         if ret != 0 {
             // Exec failed - exit child

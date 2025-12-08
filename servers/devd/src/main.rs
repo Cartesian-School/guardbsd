@@ -42,16 +42,9 @@ fn devd_main() -> ! {
         );
     }
 
-    let port = match port_create() {
-        Ok(p) => {
-            klog_info!("devd", "device server started (port={})", p);
-            p
-        }
-        Err(_) => {
-            klog_error!("devd", "failed to create device server port");
-            exit(1);
-        }
-    };
+    // Use fixed port for devd (matches libgbsd::device::DEVD_PORT)
+    let port = 1100;
+    klog_info!("devd", "device server started (port={})", port);
 
     let mut req_buf = [0u8; 256];
     let mut resp_buf = [0u8; 8];
