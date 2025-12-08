@@ -22,6 +22,11 @@ pub const SYS_OPEN_U64: u64 = SYS_OPEN as u64;
 pub const SYS_CLOSE_U64: u64 = SYS_CLOSE as u64;
 pub const SYS_DUP_U64: u64 = SYS_DUP as u64;
 pub const SYS_DUP2_U64: u64 = SYS_DUP2 as u64;
+pub const SYS_WAITPID_U64: u64 = SYS_WAITPID as u64;
+pub const SYS_SETPGID_U64: u64 = SYS_SETPGID as u64;
+pub const SYS_GETPGID_U64: u64 = SYS_GETPGID as u64;
+pub const SYS_TCSETPGRP_U64: u64 = SYS_TCSETPGRP as u64;
+pub const SYS_TCGETPGRP_U64: u64 = SYS_TCGETPGRP as u64;
 
 use crate::error::Result;
 

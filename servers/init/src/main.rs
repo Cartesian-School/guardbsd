@@ -24,6 +24,10 @@ mod syscalls {
     pub const GBSD_SYS_OPEN: u64 = SYS_OPEN as u64;
     pub const GBSD_SYS_DUP2: u64 = SYS_DUP2 as u64;
     pub const GBSD_SYS_CLOSE: u64 = SYS_CLOSE as u64;
+    pub const GBSD_SYS_SETPGID: u64 = SYS_SETPGID as u64;
+    pub const GBSD_SYS_GETPGID: u64 = SYS_GETPGID as u64;
+    pub const GBSD_SYS_TCSETPGRP: u64 = SYS_TCSETPGRP as u64;
+    pub const GBSD_SYS_WAITPID: u64 = SYS_WAITPID as u64;
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]
@@ -268,6 +272,94 @@ mod syscalls {
             Ok(())
         }
     }
+    
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn setpgid(pid: usize, pgid: usize) -> Result<(), ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_SETPGID,
+                in("rdi") pid as u64,
+                in("rsi") pgid as u64,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+    
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn getpgid(pid: usize) -> Result<usize, ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_GETPGID,
+                in("rdi") pid as u64,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(ret as usize)
+        }
+    }
+    
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn tcsetpgrp(fd: usize, pgid: u64) -> Result<(), ()> {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_TCSETPGRP,
+                in("rdi") fd as u64,
+                in("rsi") pgid,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        if (ret as i64) < 0 {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+    
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub fn waitpid(pid: isize, options: u32) -> Result<Option<(usize, i32)>, ()> {
+        let ret: u64;
+        let mut status: i32 = 0;
+        unsafe {
+            core::arch::asm!(
+                "int 0x80",
+                in("rax") GBSD_SYS_WAITPID,
+                in("rdi") pid as i64 as u64,
+                in("rsi") &mut status as *mut i32 as u64,
+                in("rdx") options as u64,
+                lateout("rax") ret,
+                options(nostack)
+            );
+        }
+        let ret_i = ret as i64;
+        if ret_i < 0 {
+            Err(())
+        } else if ret_i == 0 {
+            Ok(None)
+        } else {
+            Ok(Some((ret_i as usize, status)))
+        }
+    }
 
     #[cfg(target_arch = "x86_64")]
     #[inline(always)]
@@ -365,6 +457,13 @@ pub extern "C" fn _start() -> ! {
 }
 
 fn init_main() {
+    // Set init as its own process group leader
+    let _ = syscalls::setpgid(0, 0);
+    
+    // Set init as foreground process group for console initially
+    let init_pgid = syscalls::getpgid(0).unwrap_or(1);
+    let _ = syscalls::tcsetpgrp(0, init_pgid as u64);
+    
     // Create IPC port for init process
     let port = syscalls::port_create();
     if port == 0 {
@@ -375,8 +474,13 @@ fn init_main() {
     startup_sequence();
 
     // After startup, init becomes the parent of all processes
-    // In a real system, this would wait for children and handle signals
+    // Reap zombie children and handle signals
     loop {
+        // Reap any zombie children (non-blocking)
+        while let Ok(Some((_pid, _status))) = syscalls::waitpid(-1, 1) {
+            // Child exited - in production, restart critical services
+        }
+        
         #[cfg(target_arch = "x86_64")]
         unsafe {
             core::arch::asm!("pause", options(nomem, nostack));
@@ -472,15 +576,37 @@ fn start_logd() {
 }
 
 fn start_shell() {
-    // Start the GuardBSD shell
-    let path = b"/bin/gsh\0";
-    let ret = syscalls::exec(path);
-
-    if ret != 0 {
-        // Shell failed to start - log error but don't exit
-        // System continues running without interactive shell
-        return;
+    // Fork and start the GuardBSD shell with job control
+    let pid = syscalls::fork();
+    
+    if pid == 0 {
+        // Child process - will become the shell
+        
+        // Put shell in its own process group
+        let _ = syscalls::setpgid(0, 0);
+        
+        // Make shell the foreground process group
+        let shell_pgid = syscalls::getpgid(0).unwrap_or(0);
+        let _ = syscalls::tcsetpgrp(0, shell_pgid as u64);
+        
+        // Execute shell
+        let path = b"/bin/gsh\0";
+        let ret = syscalls::exec(path);
+        
+        // If exec fails, exit child
+        if ret != 0 {
+            syscalls::exit(1);
+        }
+    } else if pid > 0 {
+        // Parent (init) - ensure shell's pgid is set
+        let _ = syscalls::setpgid(pid as usize, pid as usize);
+        
+        // Give terminal to shell
+        let _ = syscalls::tcsetpgrp(0, pid as u64);
+        
+        // Init doesn't wait for shell - shell runs as long-lived process
     }
+    // If fork failed (pid < 0), just return
 }
 
 fn start_ramfs() -> u64 {
