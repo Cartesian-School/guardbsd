@@ -36,9 +36,12 @@ pub fn handle_interrupt() {
         // Translate scancode to ASCII
         let ascii = SCANCODE_MAP[scancode as usize];
         if ascii != 0 {
-            // Add to ring buffer
+            // Add to ring buffer (legacy)
             INPUT_BUFFER[BUF_WRITE] = ascii;
             BUF_WRITE = (BUF_WRITE + 1) % 256;
+            
+            // NEW: Feed to console TTY with line discipline
+            crate::drivers::console::handle_input_char(ascii);
         }
     }
 }

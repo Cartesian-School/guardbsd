@@ -39,6 +39,9 @@ pub const SYS_IPC_PORT_CREATE: usize = 30;
 pub const SYS_IPC_SEND: usize = 31;
 pub const SYS_IPC_RECV: usize = 32;
 
+// Console/TTY Syscalls
+pub const SYS_CONSOLE_READ: usize = 40;
+
 // Signal Syscalls
 pub const SYS_SIGNAL: usize = 40;
 pub const SYS_SIGACTION: usize = 41;

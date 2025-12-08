@@ -142,10 +142,9 @@ pub fn sys_read(fd: u32, buf: *mut u8, len: usize) -> isize {
             return EBADF;
         }
         
-        // Special handling for stdin (fd 0)
+        // Special handling for stdin (fd 0) - read from console TTY
         if fd == 0 {
-            // stdin not yet implemented - return 0 (EOF)
-            return 0;
+            return sys_console_read(buf, len);
         }
         
         // Get file descriptor
@@ -356,5 +355,23 @@ unsafe fn inb(port: u16) -> u8 {
     #[cfg(target_arch = "x86_64")]
     core::arch::asm!("in al, dx", out("al") ret, in("dx") port);
     ret
+}
+
+/// Read from console input buffer (for /dev/console stdin)
+/// Returns number of bytes read, or negative error code
+pub fn sys_console_read(buf: *mut u8, len: usize) -> isize {
+    unsafe {
+        // Validate buffer pointer
+        if buf.is_null() || len == 0 {
+            return EINVAL;
+        }
+        
+        // Create a safe slice from user buffer
+        let user_buf = core::slice::from_raw_parts_mut(buf, len);
+        
+        // Read from console TTY
+        let count = crate::drivers::console::read(user_buf);
+        count as isize
+    }
 }
 

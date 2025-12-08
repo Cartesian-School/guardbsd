@@ -42,7 +42,8 @@ pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize
         SYS_CHDIR => sys_chdir(arg1 as *const u8),
         SYS_GETCWD => sys_getcwd(arg1 as *mut u8, arg2),
         SYS_MOUNT => sys_mount(arg1 as *const u8, arg2 as *const u8, arg3 as *const u8),
-        SYS_UMOUNT => sys_umount(arg1 as *const u8),
+        SYS_UMOUNT => fs::sys_umount(arg1 as *const u8),
+        SYS_CONSOLE_READ => fs::sys_console_read(arg1 as *mut u8, arg2),
         _ => -1,
     }
 }

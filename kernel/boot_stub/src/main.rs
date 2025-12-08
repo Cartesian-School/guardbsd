@@ -56,6 +56,7 @@ mod syscall {
             SYS_GETCWD => sys_getcwd(arg1 as *mut u8, arg2),
             SYS_MOUNT => sys_mount(arg1 as *const u8, arg2 as *const u8, arg3 as *const u8),
             SYS_UMOUNT => sys_umount(arg1 as *const u8),
+            SYS_CONSOLE_READ => crate::syscalls::fs::sys_console_read(arg1 as *mut u8, arg2),
             
             // Logging (still using local stubs)
             SYS_LOG_READ => ENOSYS,
