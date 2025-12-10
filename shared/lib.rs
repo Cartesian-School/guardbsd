@@ -37,9 +37,9 @@ pub mod syscall_numbers {
     pub const SYS_IPC_RECV: usize = 32;
 
     // Logging Syscalls
-    pub const SYS_LOG_READ: usize = 40;
-    pub const SYS_LOG_ACK: usize = 41;
-    pub const SYS_LOG_REGISTER_DAEMON: usize = 42;
+    pub const SYS_LOG_READ: usize = 50;
+    pub const SYS_LOG_ACK: usize = 51;
+    pub const SYS_LOG_REGISTER_DAEMON: usize = 52;
 
     // Signal Syscalls
     pub const SYS_KILL: usize = 50;

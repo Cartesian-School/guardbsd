@@ -19,13 +19,15 @@
 struct BootInfo {
     UINT32 magic;           /* 0x42534447 */
     UINT32 version;         /* 0x00010000 */
+    UINT32 size;            /* sizeof(struct BootInfo) */
+    UINT32 kernel_crc32;    /* CRC32 of loaded kernel PT_LOAD segments */
     UINT64 mem_lower;       /* Memory below 1MB (KB) */
     UINT64 mem_upper;       /* Memory above 1MB (KB) */
     UINT32 boot_device;     /* Boot device ID */
     CHAR8 *cmdline;         /* Kernel command line */
     UINT32 mods_count;      /* Number of modules */
     struct Module *mods;    /* Module array */
-    VOID *mmap;             /* Memory map */
+    struct BootMmapEntry *mmap; /* Memory map */
     UINT32 mmap_count;      /* Memory map entries */
 } __attribute__((packed));
 
@@ -33,6 +35,13 @@ struct Module {
     UINT64 mod_start;
     UINT64 mod_end;
     CHAR8 *string;
+    UINT32 reserved;
+} __attribute__((packed));
+
+struct BootMmapEntry {
+    UINT64 base;
+    UINT64 length;
+    UINT32 typ;      /* 1 = usable */
     UINT32 reserved;
 } __attribute__((packed));
 
@@ -94,6 +103,20 @@ static VOID *memset(VOID *s, INT32 c, UINTN n) {
     UINT8 *p = s;
     while (n--) *p++ = (UINT8)c;
     return s;
+}
+
+/* CRC32 (IEEE 802.3) */
+static UINT32 crc32(const VOID *data, UINTN len) {
+    UINT32 crc = 0xFFFFFFFF;
+    const UINT8 *p = (const UINT8 *)data;
+    for (UINTN i = 0; i < len; i++) {
+        crc ^= p[i];
+        for (int b = 0; b < 8; b++) {
+            UINT32 mask = (UINT32)-(INT32)(crc & 1u);
+            crc = (crc >> 1) ^ (0xEDB88320 & mask);
+        }
+    }
+    return crc ^ 0xFFFFFFFF;
 }
 
 /* ========================================================================
@@ -211,6 +234,25 @@ static INT32 verify_elf(Elf64_Ehdr *ehdr) {
     return 1;
 }
 
+static UINT32 compute_kernel_crc(void *elf_data) {
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf_data;
+    if (!verify_elf(ehdr)) {
+        return 0;
+    }
+
+    Elf64_Phdr *phdr = (Elf64_Phdr *)((UINT8 *)elf_data + ehdr->e_phoff);
+    UINT32 crc = 0;
+
+    for (UINT16 i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type != PT_LOAD) continue;
+        UINT8 *seg = (UINT8 *)(UINTN)phdr[i].p_paddr;
+        UINTN seg_len = (UINTN)phdr[i].p_memsz;
+        crc ^= crc32(seg, seg_len);
+    }
+
+    return crc;
+}
+
 static UINT64 load_elf(VOID *elf_data, UINTN elf_size) {
     Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf_data;
     
@@ -254,13 +296,16 @@ static UINT64 load_elf(VOID *elf_data, UINTN elf_size) {
 
 static struct BootInfo *build_bootinfo(EFI_MEMORY_DESCRIPTOR *mmap,
                                         UINTN mmap_size,
-                                        UINTN desc_size) {
+                                        UINTN desc_size,
+                                        UINT32 kernel_crc32) {
     /* Allocate BootInfo at fixed address */
     struct BootInfo *bi = AllocatePool(sizeof(struct BootInfo));
     if (!bi) return NULL;
     
     bi->magic = GBSD_MAGIC;
     bi->version = 0x00010000;
+    bi->size = sizeof(struct BootInfo);
+    bi->kernel_crc32 = kernel_crc32;
     bi->boot_device = 0;
     bi->cmdline = (CHAR8 *)"console=ttyS0";
     bi->mods_count = 0;
@@ -272,8 +317,18 @@ static struct BootInfo *build_bootinfo(EFI_MEMORY_DESCRIPTOR *mmap,
     
     UINTN entry_count = mmap_size / desc_size;
     EFI_MEMORY_DESCRIPTOR *desc = mmap;
+    struct BootMmapEntry *translated = AllocatePool(entry_count * sizeof(struct BootMmapEntry));
+    if (!translated) {
+        FreePool(bi);
+        return NULL;
+    }
     
     for (UINTN i = 0; i < entry_count; i++) {
+        translated[i].base = desc->PhysicalStart;
+        translated[i].length = desc->NumberOfPages * 4096;
+        translated[i].typ = (desc->Type == EfiConventionalMemory) ? 1 : 2;
+        translated[i].reserved = 0;
+
         if (desc->Type == EfiConventionalMemory) {
             UINT64 size = desc->NumberOfPages * 4096;
             
@@ -288,7 +343,7 @@ static struct BootInfo *build_bootinfo(EFI_MEMORY_DESCRIPTOR *mmap,
     }
     
     /* Save memory map */
-    bi->mmap = mmap;
+    bi->mmap = translated;
     bi->mmap_count = entry_count;
     
     Print(L"Memory: %lu KB low, %lu KB high\n", bi->mem_lower, bi->mem_upper);
@@ -306,6 +361,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle,
     VOID *kernel_buffer;
     UINTN kernel_size;
     UINT64 kernel_entry;
+    UINT32 kernel_crc = 0;
     
     /* Initialize globals */
     ImageHandle = image_handle;
@@ -338,6 +394,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle,
         FreePool(kernel_buffer);
         return EFI_LOAD_ERROR;
     }
+    kernel_crc = compute_kernel_crc(kernel_buffer);
     
     /* Get memory map */
     Print(L"Getting memory map...\n");
@@ -375,7 +432,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle,
     
     /* Build BootInfo */
     Print(L"Building boot information...\n");
-    struct BootInfo *bi = build_bootinfo(mmap, map_size, desc_size);
+    struct BootInfo *bi = build_bootinfo(mmap, map_size, desc_size, kernel_crc);
     if (!bi) {
         Print(L"ERROR: Cannot build BootInfo\n");
         FreePool(mmap);
@@ -415,4 +472,3 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle,
     
     return EFI_SUCCESS;
 }
-

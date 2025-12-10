@@ -2,31 +2,26 @@
 // Kernel logging syscall bridge
 // ============================================================================
 
-use crate::error::{Error, Result};
 pub use kernel_log::{LogLevel, UserLogRecord, LOG_MSG_MAX, LOG_RING_SIZE, LOG_SUBSYS_MAX};
+use crate::syscall;
 
-// Kernel logging syscalls are reserved but not implemented yet.
-
-/// # Errors
-///
-/// Always returns `Error::NoSys` as kernel logging is not implemented.
-#[inline]
-pub fn read_kernel_logs(_buf: &mut [UserLogRecord]) -> Result<usize> {
-    Err(Error::NoSys)
-}
-
-/// # Errors
-///
-/// Always returns `Error::NoSys` as kernel logging is not implemented.
-#[inline]
-pub fn ack_kernel_logs(_count: usize) -> Result<()> {
-    Err(Error::NoSys)
-}
-
-/// # Errors
-///
-/// Always returns `Error::NoSys` as kernel logging is not implemented.
-#[inline]
-pub fn register_kernel_log_daemon(_pid: u64) -> Result<()> {
-    Err(Error::NoSys)
+/// Read raw kernel log bytes into the provided buffer.
+/// Returns number of bytes copied or negative errno.
+#[inline(always)]
+pub fn log_read(buf: &mut [u8]) -> isize {
+    if buf.is_empty() {
+        return 0;
+    }
+    let ret: isize;
+    unsafe {
+        core::arch::asm!(
+            "int 0x80",
+            in("rax") syscall::SYS_LOG_READ as u64,
+            in("rdi") buf.as_mut_ptr(),
+            in("rsi") buf.len() as u64,
+            lateout("rax") ret,
+            options(nostack)
+        );
+    }
+    ret
 }

@@ -11,6 +11,7 @@ mod fs;
 // Note: Using kernel/sched/mod.rs instead of local scheduler
 mod process;
 mod ipc;
+mod log_sink;
 
 mod syscall {
     // Import canonical syscall numbers from shared crate
@@ -70,8 +71,8 @@ mod syscall {
             SYS_SETPGID => crate::syscalls::process_jobctl::sys_setpgid(arg1, arg2),
             SYS_GETPGID => crate::syscalls::process_jobctl::sys_getpgid(arg1),
             
-            // Logging (still using local stubs)
-            SYS_LOG_READ => ENOSYS,
+            // Logging
+            SYS_LOG_READ => crate::syscalls::log::sys_log_read(arg1 as *mut u8, arg2 as usize),
             SYS_LOG_ACK => ENOSYS,
             SYS_LOG_REGISTER_DAEMON => ENOSYS,
 
@@ -741,7 +742,7 @@ fn validate_bootinfo() -> &'static BootInfo {
 
 fn log_bootinfo(bi: &BootInfo) {
     unsafe {
-        print("[BOOT] BootInfo validated\n");
+        print("[BOOT] BootInfo:\n");
         print("[BOOT]   magic=0x");
         print_hex32(bi.magic);
         print(" version=0x");
@@ -750,15 +751,19 @@ fn log_bootinfo(bi: &BootInfo) {
         print_num(bi.size as usize);
         print(" bytes\n");
 
-        print("[BOOT]   kernel_crc32=0x");
-        print_hex32(bi.kernel_crc32);
-        print("\n");
-
         print("[BOOT]   mem_lower=");
         print_num(bi.mem_lower as usize);
         print(" KB mem_upper=");
         print_num(bi.mem_upper as usize);
         print(" KB\n");
+
+        print("[BOOT]   mmap_count=");
+        print_num(bi.mmap_count as usize);
+        print("\n");
+
+        print("[BOOT]   kernel_crc32=0x");
+        print_hex32(bi.kernel_crc32);
+        print("\n");
 
         print("[BOOT]   boot_device=0x");
         print_hex32(bi.boot_device);
@@ -766,51 +771,19 @@ fn log_bootinfo(bi: &BootInfo) {
         print_ptr(bi.cmdline);
         print("\n");
 
-        print("[BOOT] cmdline: ");
-        print_ptr(bi.cmdline);
-        print("\n");
-
-        print("[BOOT]   mmap entries: ");
-        print_num(bi.mmap_count as usize);
-        print("\n");
-
         let entries = core::slice::from_raw_parts(bi.mmap, bi.mmap_count as usize);
-        for (i, e) in entries.iter().enumerate() {
-            print("  [");
-            print_num(i);
-            print("] base=0x");
+        for e in entries.iter() {
+            if e.typ != 1 {
+                continue;
+            }
+            print("[MMAP] usable region: base=0x");
             print_hex64(e.base);
             print(" len=0x");
             print_hex64(e.length);
-            print(" type=");
-            print_num(e.typ as usize);
-            print("\n");
-        }
-
-        print("[BOOT]   mods_count=");
-        print_num(bi.mods_count as usize);
-        print(" mods_ptr=0x");
-        print_hex64(bi.mods as u64);
-        print("\n");
-
-        print("[BOOT]   mmap_ptr=0x");
-        print_hex64(bi.mmap as u64);
-        print(" mmap_count=");
-        print_num(bi.mmap_count as usize);
-        print("\n");
-
-        if bi.mods_count > 0 {
-            let mods = core::slice::from_raw_parts(bi.mods, bi.mods_count as usize);
-            for m in mods {
-                print("[MODULE] ");
-                print_ptr(m.string);
-                print(" @ 0x");
-                print_hex32(m.mod_start as u32);
-                print(" size=");
-                let size = (m.mod_end - m.mod_start) as usize;
-                print_num(size);
-                print("\n");
-            }
+            print(" (pages=");
+            let pages = (e.length as usize + PAGE_SIZE - 1) / PAGE_SIZE;
+            print_num(pages);
+            print(")\n");
         }
     }
 }
@@ -840,16 +813,69 @@ unsafe fn pmm_mark_usable_range(base: u64, length: u64) {
 }
 
 unsafe fn init_memory(bi: &BootInfo) {
+    let count = bi.mmap_count as usize;
+    if count == 0 {
+        panic_and_halt("BootInfo contains no memory map entries");
+    }
     pmm_mark_all_reserved();
-    let entries = core::slice::from_raw_parts(bi.mmap, bi.mmap_count as usize);
+    let entries = core::slice::from_raw_parts(bi.mmap, count);
+
+    // Validate entries: non-zero length, no overlap between usable regions
+    for e in entries {
+        if e.length == 0 {
+            panic_and_halt("BootInfo memory entry has zero length");
+        }
+    }
+    for i in 0..count {
+        if entries[i].typ != 1 {
+            continue;
+        }
+        let start_i = entries[i].base;
+        let end_i = start_i.checked_add(entries[i].length).unwrap_or(0);
+        if end_i == 0 {
+            panic_and_halt("BootInfo memory entry overflow");
+        }
+        for j in (i + 1)..count {
+            if entries[j].typ != 1 {
+                continue;
+            }
+            let start_j = entries[j].base;
+            let end_j = start_j.checked_add(entries[j].length).unwrap_or(0);
+            if end_j == 0 {
+                panic_and_halt("BootInfo memory entry overflow");
+            }
+            let overlap = start_i < end_j && start_j < end_i;
+            if overlap {
+                panic_and_halt("BootInfo contains overlapping usable memory regions");
+            }
+        }
+    }
+
     for e in entries {
         if e.typ == 1 {
             pmm_mark_usable_range(e.base, e.length);
         }
     }
     if NEXT_PAGE == MAX_PAGES {
-        panic_and_halt("No usable memory found in BootInfo map");
+        panic_and_halt("PMM: no usable memory from BootInfo (BIOS/UEFI)");
     }
+    // Summary logging
+    let mut region_count = 0usize;
+    let mut total_bytes: usize = 0;
+    for e in entries {
+        if e.typ == 1 {
+            region_count += 1;
+            total_bytes = total_bytes.saturating_add(e.length as usize);
+        }
+    }
+    let total_pages = total_bytes / PAGE_SIZE;
+    print("[PMM] initialized from BootInfo: regions=");
+    print_num(region_count);
+    print(", pages=");
+    print_num(total_pages);
+    print(", bytes=");
+    print_num(total_bytes);
+    print("\n");
 }
 
 fn crc32(data: *const u8, len: usize) -> u32 {
@@ -872,8 +898,21 @@ fn verify_kernel_crc(bi: &BootInfo) {
         let len = end - start;
         let crc = crc32(start as *const u8, len);
         if crc != bi.kernel_crc32 {
+            print("[SECURITY] kernel_crc32 (bootloader) = 0x");
+            print_hex32(bi.kernel_crc32);
+            print("\n");
+            print("[SECURITY] kernel_crc32 (recomputed) = 0x");
+            print_hex32(crc);
+            print("\n");
+            print("[SECURITY] Kernel CRC MISMATCH – halting\n");
             panic_and_halt("Kernel integrity check failed");
         }
+        print("[SECURITY] kernel_crc32 (bootloader) = 0x");
+        print_hex32(bi.kernel_crc32);
+        print("\n");
+        print("[SECURITY] kernel_crc32 (recomputed) = 0x");
+        print_hex32(crc);
+        print("\n");
         print("[SECURITY] Kernel CRC verified\n");
     }
 }
@@ -1157,6 +1196,7 @@ pub extern "C" fn syscall_signal_check() {
 pub extern "C" fn guardbsd_main() -> ! {
     unsafe {
         serial_init();
+        print("[BOOT] guardbsd_main entered\n");
 
         // Validate boot protocol and log BootInfo contents before continuing.
         let bi = validate_bootinfo();
@@ -1189,6 +1229,9 @@ pub extern "C" fn guardbsd_main() -> ! {
         print("\n[INIT] Initializing filesystem...\n");
         init_filesystem();
         print("[OK] ISO filesystem ready\n");
+        print("\n[INIT] Initializing kernel log file sink...\n");
+        crate::log_sink::init_klog_file_sink();
+        print("[INIT] Kernel log file sink configured (stubbed, waiting for VFS)\n");
         test_init_elf_parse();
         print("\n[INIT] Setting up interrupt handling...\n");
         init_pic();

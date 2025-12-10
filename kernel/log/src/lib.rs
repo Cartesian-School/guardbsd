@@ -171,7 +171,150 @@ pub fn default_thread_id() -> ThreadId {
     0
 }
 
-pub fn default_early_print(_msg: &str) {}
+pub fn default_early_print(msg: &str) {
+    log_backend::write_bytes(msg.as_bytes());
+}
+
+// --------------------------------------------------------------------------
+// Logger backends: serial + in-memory ring + VFS stub
+// --------------------------------------------------------------------------
+
+pub mod log_backend {
+    use core::sync::atomic::{AtomicBool, Ordering};
+    use super::SpinLock;
+
+    const MEM_RING_SIZE: usize = 4096;
+
+    static SERIAL_ENABLED: AtomicBool = AtomicBool::new(true);
+    static MEM_ENABLED: AtomicBool = AtomicBool::new(true);
+    static VFS_ENABLED: AtomicBool = AtomicBool::new(true); // stub for future file-backed logging
+    type ExternalSinkFn = fn(&[u8]);
+    static EXTERNAL_SINK_ENABLED: AtomicBool = AtomicBool::new(false);
+    static mut EXTERNAL_SINK: Option<ExternalSinkFn> = None;
+
+    struct MemRing {
+        buf: [u8; MEM_RING_SIZE],
+        head: usize,
+        tail: usize,
+        full: bool,
+    }
+
+    impl MemRing {
+        const fn new() -> Self {
+            Self {
+                buf: [0; MEM_RING_SIZE],
+                head: 0,
+                tail: 0,
+                full: false,
+            }
+        }
+
+        fn len(&self) -> usize {
+            if self.full {
+                MEM_RING_SIZE
+            } else if self.head >= self.tail {
+                self.head - self.tail
+            } else {
+                MEM_RING_SIZE - self.tail + self.head
+            }
+        }
+
+        fn push_bytes(&mut self, data: &[u8]) {
+            for &b in data {
+                self.buf[self.head] = b;
+                self.head = (self.head + 1) % MEM_RING_SIZE;
+                if self.full {
+                    self.tail = self.head;
+                } else if self.head == self.tail {
+                    self.full = true;
+                }
+            }
+        }
+
+        fn copy_out(&self, out: &mut [u8]) -> usize {
+            let available = self.len();
+            let count = core::cmp::min(out.len(), available);
+            for i in 0..count {
+                let idx = (self.tail + i) % MEM_RING_SIZE;
+                out[i] = self.buf[idx];
+            }
+            count
+        }
+    }
+
+    static MEM_RING: SpinLock<MemRing> = SpinLock::new(MemRing::new());
+
+    fn serial_write(data: &[u8]) {
+        const COM1: u16 = 0x3F8;
+        for &byte in data {
+            unsafe {
+                while (core::ptr::read_volatile((COM1 + 5) as *const u8) & 0x20) == 0 {}
+                core::ptr::write_volatile(COM1 as *mut u8, byte);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn enable_serial(enable: bool) {
+        SERIAL_ENABLED.store(enable, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn enable_mem_ring(enable: bool) {
+        MEM_ENABLED.store(enable, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn enable_vfs_stub(enable: bool) {
+        VFS_ENABLED.store(enable, Ordering::Relaxed);
+    }
+
+    /// Core write entry for all backends.
+    pub fn write_bytes(data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
+        if SERIAL_ENABLED.load(Ordering::Relaxed) {
+            serial_write(data);
+        }
+        if MEM_ENABLED.load(Ordering::Relaxed) {
+            if let Some(mut ring) = MEM_RING.try_lock() {
+                ring.push_bytes(data);
+            }
+        }
+        if VFS_ENABLED.load(Ordering::Relaxed) {
+            // TODO: persist to VFS file when VFS is available
+        }
+        if EXTERNAL_SINK_ENABLED.load(Ordering::Relaxed) {
+            if let Some(sink) = unsafe { EXTERNAL_SINK } {
+                sink(data);
+            }
+        }
+    }
+
+    /// Copy bytes from the in-memory ring buffer for diagnostics.
+    #[must_use]
+    pub fn copy_mem(out: &mut [u8]) -> usize {
+        if let Some(ring) = MEM_RING.try_lock() {
+            ring.copy_out(out)
+        } else {
+            0
+        }
+    }
+
+    #[must_use]
+    pub fn serial_enabled() -> bool {
+        SERIAL_ENABLED.load(Ordering::Relaxed)
+    }
+
+    /// Register an external sink callback (non-blocking, best effort).
+    pub fn set_external_sink(sink: Option<ExternalSinkFn>) {
+        unsafe {
+            EXTERNAL_SINK = sink;
+        }
+        EXTERNAL_SINK_ENABLED.store(sink.is_some(), Ordering::Relaxed);
+    }
+}
 
 // --------------------------------------------------------------------------
 // Public API
@@ -628,8 +771,7 @@ impl CallbackCell {
 
 // Error printing without logging (prevents recursion)
 fn serial_error_print(msg: &[u8]) {
-    // Simple serial output for error messages
-    // Uses COM1 directly without any logging infrastructure
+    // Direct COM1 write to guarantee visibility even if backends are misconfigured
     const COM1: u16 = 0x3F8;
     for &byte in msg {
         unsafe {
@@ -637,9 +779,11 @@ fn serial_error_print(msg: &[u8]) {
             core::ptr::write_volatile(COM1 as *mut u8, byte);
         }
     }
-    // Add newline
     unsafe {
         while (core::ptr::read_volatile((COM1 + 5) as *const u8) & 0x20) == 0 {}
         core::ptr::write_volatile(COM1 as *mut u8, b'\n');
     }
+    // Also forward into unified logging path (may duplicate serial if enabled)
+    log_backend::write_bytes(msg);
+    log_backend::write_bytes(b"\n");
 }

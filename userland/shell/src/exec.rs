@@ -66,6 +66,8 @@ fn execute_builtin(
             println(b"  fg     - Bring job to foreground")?;
             println(b"  bg     - Send job to background")?;
             println(b"  jobs   - List background jobs")?;
+            println(b"  klog   - Dump recent kernel log (alias: dmesg)")?;
+            println(b"  klogfile - Dump persistent kernel log (/var/log/kern.log)")?;
             Ok(())
         }
         Builtin::Echo => {
@@ -261,7 +263,58 @@ fn execute_builtin(
             // List jobs
             jobs.list_jobs()
         }
+        Builtin::Klog => {
+            builtin_klog()
+        }
+        Builtin::KlogFile => {
+            builtin_klog_file()
+        }
     }
+}
+
+fn builtin_klog() -> Result<()> {
+    let mut buf = [0u8; 4096];
+    let n = gbsd::log_read(&mut buf);
+
+    if n <= 0 {
+        println(b"[klog] no kernel log data available")?;
+        return Ok(());
+    }
+
+    let n = core::cmp::min(n as usize, buf.len());
+    let _ = gbsd::write(1, &buf[..n]);
+    Ok(())
+}
+
+fn builtin_klog_file() -> Result<()> {
+    // Best-effort read of persistent log file
+    let fd = match gbsd::fs::open(b"/var/log/kern.log\0", gbsd::fs::O_RDONLY) {
+        Ok(fd) => fd,
+        Err(_) => {
+            println(b"[klogfile] unable to open /var/log/kern.log")?;
+            return Ok(());
+        }
+    };
+
+    let mut buf = [0u8; 1024];
+    loop {
+        match gbsd::fs::read(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                let _ = gbsd::write(1, &buf[..n]);
+                if n < buf.len() {
+                    break;
+                }
+            }
+            Err(_) => {
+                println(b"[klogfile] read error")?;
+                break;
+            }
+        }
+    }
+
+    let _ = gbsd::fs::close(fd);
+    Ok(())
 }
 
 fn find_char(slice: &[u8], ch: u8) -> Option<usize> {

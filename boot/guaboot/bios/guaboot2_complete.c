@@ -311,20 +311,6 @@ static void detect_memory(struct BootInfo *bi) {
 
 void guaboot2_main(void) {
     static const char cmdline[] = "root=/dev/ram0 debug=true";
-    static struct Module modules[] = {
-        {
-            .mod_start = 0x00200000,
-            .mod_end   = 0x00200000 + 4096,
-            .string    = "test_module",
-            .reserved  = 0,
-        },
-    };
-    static struct BootMmapEntry mmap_entries[] = {
-        /* [0x00000000 – 0x00100000] = RESERVED */
-        { .base = 0x00000000, .length = 0x00100000, .type = 2, .reserved = 0 },
-        /* [0x00100000 – 0x08000000] = USABLE (127 MB) */
-        { .base = 0x00100000, .length = 0x07F00000, .type = 1, .reserved = 0 },
-    };
     puts("\n");
     puts("================================================================================\n");
     puts("GuaBoot 1.0 - Stage 2 (BSD 3-Clause License)\n");
@@ -346,29 +332,26 @@ void guaboot2_main(void) {
         goto halt;
     }
 
-    /* Compute kernel CRC over loaded segments */
-    bi->kernel_crc32 = compute_kernel_crc(kernel_buffer);
-    puts("Kernel CRC32: 0x");
-    put_hex(bi->kernel_crc32);
-    puts("\n");
-    
+    struct BootInfo *bi = (struct BootInfo *)BOOT_INFO_ADDR;
+
     /* Build BootInfo */
     puts("Building boot information...\n");
-    struct BootInfo *bi = (struct BootInfo *)BOOT_INFO_ADDR;
-    
     bi->magic = GBSD_MAGIC;
     bi->version = 0x00010000;
     bi->size = sizeof(struct BootInfo);
     bi->boot_device = 0x80;  /* First hard disk */
     bi->cmdline = (char *)cmdline;
-    bi->mods_count = sizeof(modules) / sizeof(modules[0]);
-    bi->mods = modules;
-    bi->mmap = mmap_entries;
-    bi->mmap_count = sizeof(mmap_entries) / sizeof(mmap_entries[0]);
-    bi->mem_lower = 1024;      /* 1MB below */
-    bi->mem_upper = 127 * 1024;/* 127MB above 1MB */
-    
-    /* Intentionally skip BIOS/UEFI detection: use hard-coded map */
+    bi->mods_count = 0;
+    bi->mods = NULL;
+
+    /* Compute kernel CRC over loaded segments */
+    bi->kernel_crc32 = compute_kernel_crc(kernel_buffer);
+    puts("Kernel CRC32: 0x");
+    put_hex(bi->kernel_crc32);
+    puts("\n");
+
+    /* Detect memory via E820 */
+    detect_memory(bi);
     
     puts("Switching to 64-bit mode...\n");
     

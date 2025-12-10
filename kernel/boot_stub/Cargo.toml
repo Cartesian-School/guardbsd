@@ -8,6 +8,8 @@ cc = "1.0"
 
 [dependencies]
 shared = { path = "../../shared" }
+bitflags = "2"
+kernel_log = { path = "../log" }
 
 [profile.release]
 panic = "abort"

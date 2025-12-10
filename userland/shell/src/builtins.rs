@@ -20,6 +20,8 @@ pub enum Builtin {
     Fg,
     Bg,
     Jobs,
+    Klog,
+    KlogFile,
 }
 
 impl Builtin {
@@ -38,6 +40,8 @@ impl Builtin {
             b"fg" => Some(Builtin::Fg),
             b"bg" => Some(Builtin::Bg),
             b"jobs" => Some(Builtin::Jobs),
+            b"klog" | b"dmesg" => Some(Builtin::Klog),
+            b"klogfile" | b"klogfs" => Some(Builtin::KlogFile),
             _ => None,
         }
     }
