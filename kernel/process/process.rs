@@ -36,7 +36,7 @@ pub fn create_process(entry: u64, stack_top: u64, page_table: usize) -> Option<P
     proc.parent = unsafe { CURRENT_PROCESS };
     proc.heap_base = 0x400000; // Default heap start at 4MB
     proc.heap_limit = 0x400000;
-    proc.memory_limit = 128 * 1024 * 1024; // 128MB default limit
+    proc.memory_limit = 16 * 1024 * 1024; // 16MB default limit
     
     // Add to parent's children list if we have a parent
     if let Some(parent_pid) = proc.parent {
@@ -121,4 +121,65 @@ pub fn switch_to(pid: Pid) {
 
 pub fn get_current() -> Option<Pid> {
     unsafe { CURRENT_PROCESS }
+}
+
+/// Try to reserve additional memory_usage for a process. Returns true on success.
+pub fn try_add_memory_usage(pid: Pid, bytes: u64) -> bool {
+    unsafe {
+        for slot in PROCESS_TABLE.iter_mut() {
+            if let Some(proc) = slot {
+                if proc.pid == pid {
+                    let new_usage = proc.memory_usage.saturating_add(bytes);
+                    if new_usage > proc.memory_limit {
+                        return false;
+                    }
+                    proc.memory_usage = new_usage;
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Mark a process as killed (used by limit violations).
+pub fn mark_killed(pid: Pid) {
+    unsafe {
+        for slot in PROCESS_TABLE.iter_mut() {
+            if let Some(proc) = slot {
+                if proc.pid == pid {
+                    proc.killed = true;
+                    return;
+                }
+            }
+        }
+    }
+}
+
+/// Get mutable reference to process by PID.
+pub fn get_process_mut(pid: Pid) -> Option<&'static mut Process> {
+    unsafe {
+        for slot in PROCESS_TABLE.iter_mut() {
+            if let Some(proc) = slot {
+                if proc.pid == pid {
+                    return Some(proc);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Add to a process's accounted memory usage (saturating add).
+pub fn add_memory_usage(pid: Pid, bytes: u64) {
+    unsafe {
+        for slot in PROCESS_TABLE.iter_mut() {
+            if let Some(proc) = slot {
+                if proc.pid == pid {
+                    proc.memory_usage = proc.memory_usage.saturating_add(bytes);
+                    return;
+                }
+            }
+        }
+    }
 }

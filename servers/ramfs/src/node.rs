@@ -19,7 +19,7 @@ pub struct Node {
     pub data: [u8; 4096],
     pub size: usize,
     pub parent: u32,
-    pub dev_id: u32,  // Device ID for device nodes (from devd)
+    pub dev_id: u32, // Device ID for device nodes (from devd)
 }
 
 impl Node {

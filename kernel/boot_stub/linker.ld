@@ -4,7 +4,8 @@ ENTRY(_start)
 
 SECTIONS
 {
-    . = 0x00100000;
+    __image_start = 0x00100000;
+    . = __image_start;
 
     /* Entry point MUST be first (FreeBSD-style) */
     .text : ALIGN(4K) {
@@ -24,6 +25,7 @@ SECTIONS
         *(.bss .bss.*)
         *(COMMON)
     }
+    __image_end = .;
 
     /DISCARD/ : {
         *(.eh_frame)

@@ -37,6 +37,25 @@ fn find_process_mut(pid: Pid) -> Option<&'static mut Process> {
     None
 }
 
+pub fn find_process_by_pid(pid: Pid) -> Option<&'static Process> {
+    unsafe {
+        let table = get_process_table();
+        for slot in table.iter() {
+            if let Some(proc) = slot {
+                if proc.pid == pid {
+                    return Some(proc);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Internal helper for mutation from signal paths
+pub fn find_process_mut_for_signal(pid: Pid) -> Option<&'static mut Process> {
+    find_process_mut(pid)
+}
+
 // Error codes
 const ESRCH: isize = -3;   // No such process
 const EINVAL: isize = -22; // Invalid argument
@@ -141,6 +160,18 @@ fn send_signal_to_pid(pid: Pid, sig: i32) -> isize {
     
     // Set pending signal bit
     proc.pending_signals |= 1u64 << sig;
+    // Mark killed for fatal signals
+    if sig == crate::process::types::SIGKILL || sig == crate::process::types::SIGTERM {
+        proc.killed = true;
+    }
+    // Log enqueue
+    unsafe {
+        crate::print("[SIGNAL] queued signal ");
+        crate::print_num(sig as usize);
+        crate::print(" for PID ");
+        crate::print_num(pid as usize);
+        crate::print("\n");
+    }
     
     0
 }
@@ -344,4 +375,3 @@ pub fn check_pending_signals() {
         }
     }
 }
-

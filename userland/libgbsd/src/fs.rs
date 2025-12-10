@@ -6,8 +6,9 @@
 
 use crate::error::{Error, Result};
 use crate::syscall::{
-    syscall1, syscall2, syscall3, SYS_CHDIR, SYS_CLOSE, SYS_DUP, SYS_DUP2, SYS_GETCWD, SYS_MKDIR, SYS_MOUNT, SYS_OPEN,
-    SYS_READ, SYS_RENAME, SYS_STAT, SYS_SYNC, SYS_UMOUNT, SYS_UNLINK, SYS_WRITE,
+    syscall1, syscall2, syscall3, SYS_CHDIR, SYS_CLOSE, SYS_DUP, SYS_DUP2, SYS_GETCWD, SYS_MKDIR,
+    SYS_MOUNT, SYS_OPEN, SYS_READ, SYS_RENAME, SYS_STAT, SYS_SYNC, SYS_UMOUNT, SYS_UNLINK,
+    SYS_WRITE,
 };
 
 pub type Fd = u64;

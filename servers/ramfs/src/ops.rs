@@ -171,7 +171,12 @@ pub fn mknod(fs: &mut RamFs, path: &[u8], dev_id: u32) -> i64 {
     }
 
     if let Some(idx) = fs.create_device(0, name, dev_id) {
-        klog_info!("ramfs", "create device node '{}' dev_id={}", name_str, dev_id);
+        klog_info!(
+            "ramfs",
+            "create device node '{}' dev_id={}",
+            name_str,
+            dev_id
+        );
         return idx as i64;
     }
 

@@ -21,6 +21,10 @@ static mut ISO_BASE: usize = 0;
 static mut ROOT_LBA: u32 = 0;
 static mut ROOT_SIZE: u32 = 0;
 
+// Embedded init ELF for boot-time loading when no real ISO is present.
+// Path is relative to boot_stub/src/.
+static INIT_ELF: &[u8] = include_bytes!("../../../servers/init/init_min.bin");
+
 pub fn init(base: usize) {
     unsafe {
         ISO_BASE = base;
@@ -32,6 +36,15 @@ pub fn init(base: usize) {
 }
 
 pub fn read_file(path: &str) -> Option<&'static [u8]> {
+    // Fast-path for embedded init ELF
+    if path == "init" || path.ends_with("/init") {
+        if INIT_ELF.is_empty() {
+            return None;
+        }
+        // Safety: INIT_ELF is 'static
+        return Some(INIT_ELF);
+    }
+
     unsafe {
         if ISO_BASE == 0 { return None; }
         

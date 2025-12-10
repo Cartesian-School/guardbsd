@@ -33,6 +33,10 @@ pub struct AddressSpace {
     pml4_phys: usize,
 }
 
+// Kernel PML4 template that holds the kernel half of the address space.
+static mut KERNEL_PML4_TEMPLATE: usize = 0;
+static mut KERNEL_TEMPLATE_INITIALIZED: bool = false;
+
 impl AddressSpace {
     pub fn new() -> Option<Self> {
         let pml4_phys = pmm::alloc_page()?;
@@ -41,6 +45,23 @@ impl AddressSpace {
             (*pml4).entries.fill(0);
         }
         Some(AddressSpace { pml4_phys })
+    }
+
+    /// Initialize a new address space with kernel mappings cloned into the upper half.
+    pub fn new_with_kernel_mappings() -> Option<Self> {
+        let mut addr_space = Self::new()?;
+        unsafe {
+            if KERNEL_PML4_TEMPLATE == 0 {
+                return None;
+            }
+            let dst = addr_space.pml4_phys as *mut PageTable;
+            let src = KERNEL_PML4_TEMPLATE as *const PageTable;
+            // Copy entries 256..512 (upper half) so kernel remains mapped.
+            for i in 256..ENTRIES {
+                (*dst).entries[i] = (*src).entries[i];
+            }
+        }
+        Some(addr_space)
     }
     
     /// Get the physical address of the PML4
@@ -223,4 +244,18 @@ impl AddressSpace {
             );
         }
     }
+}
+
+/// Initialize the kernel PML4 template from the currently active CR3.
+/// This must be called after paging is enabled and kernel mappings are stable.
+pub unsafe fn init_kernel_template() {
+    let cr3_val: usize;
+    core::arch::asm!("mov {}, cr3", out(reg) cr3_val, options(nomem, preserves_flags));
+    KERNEL_PML4_TEMPLATE = cr3_val & !0xFFF;
+    KERNEL_TEMPLATE_INITIALIZED = true;
+}
+
+/// Returns true if the kernel template has been recorded.
+pub fn kernel_template_ready() -> bool {
+    unsafe { KERNEL_TEMPLATE_INITIALIZED && KERNEL_PML4_TEMPLATE != 0 }
 }

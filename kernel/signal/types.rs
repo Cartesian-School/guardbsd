@@ -10,6 +10,16 @@ pub type Signal = i32;
 /// Signal handler function pointer type
 pub type SignalHandlerFn = fn();
 
+/// User-mode signal frame placed on user stack when delivering a signal.
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct SignalFrame {
+    pub saved_rip: u64,
+    pub saved_rsp: u64,
+    pub saved_rflags: u64,
+    pub signo: u64,
+}
+
 // ==================== BSD Signal Numbers ====================
 // Based on FreeBSD signal numbers
 
@@ -349,4 +359,3 @@ mod tests {
         assert!(!is_uncatchable(SIGCHLD));
     }
 }
-

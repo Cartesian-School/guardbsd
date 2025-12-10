@@ -33,6 +33,7 @@ extern "C" {
     // fn syscall_entry(); // Commented out - 64-bit only
     fn keyboard_irq_handler();
     fn timer_irq_handler();
+    fn syscall_int80_entry();
 }
 
 pub fn init_idt() {
@@ -42,9 +43,9 @@ pub fn init_idt() {
         
         // Set keyboard interrupt (IRQ1 = 0x21)
         set_idt_entry(0x21, keyboard_irq_handler as u64, 0x08, 0x8E);
-        
-        // Set syscall interrupt (0x80)
-        // set_idt_entry(0x80, syscall_entry as u64, 0x08, 0xEE); // Commented out - 64-bit only
+
+        // Set syscall interrupt (0x80) with DPL=3
+        set_idt_entry(0x80, syscall_int80_entry as u64, 0x08, 0xEE);
         
         // Load IDT
         let idtr = IdtPtr {

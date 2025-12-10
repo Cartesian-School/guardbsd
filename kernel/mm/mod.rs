@@ -12,6 +12,7 @@ pub fn init() {
 
 pub use pmm::{alloc_page, free_page};
 pub use vmm::{AddressSpace, PageFlags};
+pub use vmm::{init_kernel_template, kernel_template_ready};
 
 /// Clone an address space for fork()
 /// Returns physical address of new page table, or None if allocation fails

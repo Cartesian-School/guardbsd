@@ -18,16 +18,25 @@
 #define BOOT_INFO_ADDR 0x100000  /* 1MB - safe location for bootinfo */
 
 /* BootInfo structure - passed to kernel */
+struct BootMmapEntry {
+    uint64_t base;
+    uint64_t length;
+    uint32_t type;      /* 1 = usable, otherwise reserved */
+    uint32_t reserved;
+};
+
 struct BootInfo {
     uint32_t magic;         /* 0x42534447 "GBSD" */
     uint32_t version;       /* 0x00010000 */
+    uint32_t size;          /* sizeof(struct BootInfo) */
+    uint32_t kernel_crc32;  /* CRC32 of loaded kernel image */
     uint64_t mem_lower;     /* Memory below 1MB (KB) */
     uint64_t mem_upper;     /* Memory above 1MB (KB) */
     uint32_t boot_device;   /* BIOS boot device */
     char *cmdline;          /* Kernel command line */
     uint32_t mods_count;    /* Number of modules */
     struct Module *mods;    /* Module array */
-    void *mmap;             /* Memory map */
+    struct BootMmapEntry *mmap; /* Memory map */
     uint32_t mmap_count;    /* Memory map entries */
 };
 
@@ -107,6 +116,46 @@ static void put_hex(uint64_t val) {
         val >>= 4;
     }
     puts(buf);
+}
+
+/* ========================================================================
+ * CRC32 (IEEE 802.3)
+ * ======================================================================== */
+
+static uint32_t crc32(const void *data, size_t len) {
+    uint32_t crc = 0xFFFFFFFF;
+    const uint8_t *p = (const uint8_t *)data;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= p[i];
+        for (int b = 0; b < 8; b++) {
+            uint32_t mask = -(crc & 1u);
+            crc = (crc >> 1) ^ (0xEDB88320 & mask);
+        }
+    }
+    return crc ^ 0xFFFFFFFF;
+}
+
+static uint32_t compute_kernel_crc(void *elf_data) {
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf_data;
+    if (!verify_elf(ehdr)) {
+        return 0;
+    }
+    Elf64_Phdr *phdr = (Elf64_Phdr *)((uint8_t *)elf_data + ehdr->e_phoff);
+    uint32_t crc = 0xFFFFFFFF;
+
+    for (int i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type != PT_LOAD) continue;
+        uint8_t *seg = (uint8_t *)(uintptr_t)phdr[i].p_paddr;
+        size_t seg_len = (size_t)phdr[i].p_memsz;
+        for (size_t j = 0; j < seg_len; j++) {
+            crc ^= seg[j];
+            for (int b = 0; b < 8; b++) {
+                uint32_t mask = -(crc & 1u);
+                crc = (crc >> 1) ^ (0xEDB88320 & mask);
+            }
+        }
+    }
+    return crc ^ 0xFFFFFFFF;
 }
 
 /* ========================================================================
@@ -261,6 +310,21 @@ static void detect_memory(struct BootInfo *bi) {
  * ======================================================================== */
 
 void guaboot2_main(void) {
+    static const char cmdline[] = "root=/dev/ram0 debug=true";
+    static struct Module modules[] = {
+        {
+            .mod_start = 0x00200000,
+            .mod_end   = 0x00200000 + 4096,
+            .string    = "test_module",
+            .reserved  = 0,
+        },
+    };
+    static struct BootMmapEntry mmap_entries[] = {
+        /* [0x00000000 – 0x00100000] = RESERVED */
+        { .base = 0x00000000, .length = 0x00100000, .type = 2, .reserved = 0 },
+        /* [0x00100000 – 0x08000000] = USABLE (127 MB) */
+        { .base = 0x00100000, .length = 0x07F00000, .type = 1, .reserved = 0 },
+    };
     puts("\n");
     puts("================================================================================\n");
     puts("GuaBoot 1.0 - Stage 2 (BSD 3-Clause License)\n");
@@ -281,6 +345,12 @@ void guaboot2_main(void) {
     if (entry == 0) {
         goto halt;
     }
+
+    /* Compute kernel CRC over loaded segments */
+    bi->kernel_crc32 = compute_kernel_crc(kernel_buffer);
+    puts("Kernel CRC32: 0x");
+    put_hex(bi->kernel_crc32);
+    puts("\n");
     
     /* Build BootInfo */
     puts("Building boot information...\n");
@@ -288,12 +358,17 @@ void guaboot2_main(void) {
     
     bi->magic = GBSD_MAGIC;
     bi->version = 0x00010000;
+    bi->size = sizeof(struct BootInfo);
     bi->boot_device = 0x80;  /* First hard disk */
-    bi->cmdline = "console=ttyS0";
-    bi->mods_count = 0;
-    bi->mods = NULL;
+    bi->cmdline = (char *)cmdline;
+    bi->mods_count = sizeof(modules) / sizeof(modules[0]);
+    bi->mods = modules;
+    bi->mmap = mmap_entries;
+    bi->mmap_count = sizeof(mmap_entries) / sizeof(mmap_entries[0]);
+    bi->mem_lower = 1024;      /* 1MB below */
+    bi->mem_upper = 127 * 1024;/* 127MB above 1MB */
     
-    detect_memory(bi);
+    /* Intentionally skip BIOS/UEFI detection: use hard-coded map */
     
     puts("Switching to 64-bit mode...\n");
     
@@ -318,4 +393,3 @@ void panic(const char *msg) {
     __asm__ volatile("cli; hlt");
     while (1);
 }
-

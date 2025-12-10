@@ -7,6 +7,7 @@
 extern crate alloc;
 
 use crate::process::types::{Process, Pid, ProcessState, SIGCHLD};
+use crate::sched::{get_current_context, register_thread, set_thread_context};
 
 // Process table from kernel/process/process.rs
 extern "C" {
@@ -204,6 +205,10 @@ pub fn sys_exit(status: i32) -> ! {
         
         // Step 3: Set exit status
         set_exit_status(current_pid, status);
+        if let Some(proc) = find_process_mut(current_pid) {
+            proc.exit_code = status;
+            proc.state = ProcessState::Zombie;
+        }
         
         // Step 4: Transition process to Zombie state
         set_process_state(current_pid, ProcessState::Zombie);
@@ -220,13 +225,14 @@ pub fn sys_exit(status: i32) -> ! {
         
         // Step 7: Clear current process (scheduler will pick next)
         set_current_pid(None);
+        crate::print("[PROC] exit: PID ");
+        crate::print_num(current_pid as usize);
+        crate::print(" exited with status ");
+        crate::print_num(status as usize);
+        crate::print(" (state=Zombie)\n");
         
-        // TODO: Full scheduler integration in Phase 4
-        // For now, just halt - in Phase 4 this will do actual context switch
-        // Will call: crate::sched::schedule() or trigger reschedule
-        loop {
-            core::arch::asm!("hlt");
-        }
+        // In a full system, this would trigger a reschedule. For now halt.
+        loop { core::arch::asm!("hlt"); }
     }
 }
 
@@ -285,6 +291,72 @@ pub fn get_pid_from_tid(tid: usize) -> Option<Pid> {
     unsafe { get_current_pid() }
 }
 
+/// System call: waitpid - wait for child termination
+pub fn sys_waitpid(pid: isize, status_ptr: *mut i32, _options: i32) -> isize {
+    unsafe {
+        let parent_pid = match get_current_pid() {
+            Some(p) => p,
+            None => return -1,
+        };
+
+        let mut found_child = false;
+        let mut zombie_pid: Option<Pid> = None;
+        let mut zombie_status: i32 = 0;
+
+        let table = get_process_table();
+        for slot in table.iter() {
+            if let Some(proc) = slot {
+                if proc.parent == Some(parent_pid) {
+                    found_child = true;
+                    if (pid == -1 || pid as usize == proc.pid) && proc.state == ProcessState::Zombie {
+                        zombie_pid = Some(proc.pid);
+                        zombie_status = proc.exit_code;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if !found_child {
+            crate::print("[PROC] waitpid: no children for PID ");
+            crate::print_num(parent_pid as usize);
+            crate::print("\n");
+            return -10; // ECHILD
+        }
+
+        if let Some(zpid) = zombie_pid {
+            // Copy status
+            if !status_ptr.is_null() {
+                *status_ptr = zombie_status;
+            }
+
+            // Reap: remove from table
+            let table = get_process_table();
+            for slot in table.iter_mut() {
+                if let Some(proc) = slot {
+                    if proc.pid == zpid {
+                        *slot = None;
+                        break;
+                    }
+                }
+            }
+
+            crate::print("[PROC] waitpid: parent PID ");
+            crate::print_num(parent_pid as usize);
+            crate::print(" reaped child PID ");
+            crate::print_num(zpid as usize);
+            crate::print(" (status=");
+            crate::print_num(zombie_status as usize);
+            crate::print(")\n");
+
+            return zpid as isize;
+        } else {
+            // No zombie yet
+            return 0;
+        }
+    }
+}
+
 /// System call: fork - Create child process
 ///
 /// BSD Semantics:
@@ -330,13 +402,13 @@ pub fn sys_fork() -> isize {
         // Step 3: Clone address space (page table)
         let child_page_table = match crate::mm::clone_address_space(parent.page_table) {
             Some(pt) => pt,
-            None => return -1, // Memory allocation failed
+            None => return -12, // ENOMEM
         };
         
         // Step 4: Allocate kernel stack for child
         let child_kernel_stack = match crate::mm::alloc_page() {
             Some(page) => (page as u64) + 4096, // Top of stack
-            None => return -1, // Stack allocation failed
+            None => return -12, // Stack allocation failed
         };
         
         // Step 5: Create child Process structure by copying parent
@@ -362,8 +434,8 @@ pub fn sys_fork() -> isize {
         child.pending_signals = 0; // Child starts with no pending signals
         child.signal_mask = parent.signal_mask;
         
-        // Copy memory limits
-        child.memory_usage = 0; // Child starts fresh
+        // Copy memory limits/usage
+        child.memory_usage = parent.memory_usage;
         child.memory_limit = parent.memory_limit;
         
         // Step 7: Add child to parent's children list
@@ -371,7 +443,7 @@ pub fn sys_fork() -> isize {
             if !parent_mut.add_child(child_pid) {
                 // Parent's children list is full
                 // TODO: Free allocated resources (page table, kernel stack)
-                return -1;
+                return -12;
             }
         }
         
@@ -430,8 +502,7 @@ pub fn sys_fork() -> isize {
             Some(tid) => tid,
             None => {
                 // Scheduler registration failed
-                // TODO: Cleanup allocated resources
-                return -1;
+                return -12;
             }
         };
         
@@ -443,6 +514,11 @@ pub fn sys_fork() -> isize {
         // Step 13: Return child PID to parent
         // Note: Parent's context.rax will be set to child_pid by syscall return
         // Child's context.rax is already set to 0 above
+        crate::print("[PROC] fork: parent PID ");
+        crate::print_num(parent_pid as usize);
+        crate::print(" created child PID ");
+        crate::print_num(child_pid as usize);
+        crate::print("\n");
         child_pid as isize
     }
 }
@@ -2488,4 +2564,3 @@ mod tests {
         //   ✓ FDs work
     }
 }
-

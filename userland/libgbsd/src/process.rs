@@ -59,15 +59,15 @@ pub fn wait(status: *mut i32) -> Result<i32> {
 /// Returns (pid, status) or None if WNOHANG and no child ready
 pub fn waitpid(pid: i32, options: i32) -> Result<Option<(i32, i32)>> {
     let mut status: i32 = 0;
-    let ret = unsafe { 
+    let ret = unsafe {
         syscall3(
-            SYS_WAITPID as u64, 
-            pid as i64 as u64, 
+            SYS_WAITPID as u64,
+            pid as i64 as u64,
             &mut status as *mut i32 as u64,
-            options as u64
-        ) 
+            options as u64,
+        )
     };
-    
+
     let ret_i = ret as i64;
     if ret_i < 0 {
         Err(Error::from_code((-ret_i) as i32))

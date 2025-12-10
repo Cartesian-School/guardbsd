@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use crate::error::{Error, Result};
-use crate::ipc::{port_send, port_receive};
+use crate::ipc::{port_receive, port_send};
 
 pub type DevId = u32;
 
@@ -63,17 +63,17 @@ impl DevRequest {
 // Helper function to send request and receive response from devd
 fn devd_call(req: &DevRequest) -> Result<DevId> {
     let req_bytes = req.to_bytes();
-    
+
     // Send request to devd
     port_send(DEVD_PORT, req_bytes.as_ptr(), req_bytes.len())?;
-    
+
     // Receive response
     let mut resp_buf = [0u8; 8];
     port_receive(DEVD_PORT, resp_buf.as_mut_ptr(), resp_buf.len())?;
-    
+
     // Parse response (i64 result)
     let result = i64::from_le_bytes(resp_buf);
-    
+
     if result < 0 {
         Err(Error::from_code((-result) as i32))
     } else {

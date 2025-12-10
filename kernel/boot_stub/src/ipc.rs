@@ -278,7 +278,11 @@ impl ServerChannels {
     }
 
     pub fn send_to_init(&mut self, mut msg: Message) -> bool {
-        msg.receiver_pid = 4; // Init server PID
+        if let Some((_, pid)) = lookup_service("init") {
+            msg.receiver_pid = pid;
+        } else {
+            return false;
+        }
         unsafe {
             IPC_MANAGER.assume_init_mut().send_message(self.init_port, msg)
         }

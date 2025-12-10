@@ -221,7 +221,12 @@ fn forward_to_ramfs(req: &VfsRequest, ramfs_port: usize, vfs_port: usize) -> Vfs
 }
 
 // Helper to create device node in RAMFS
-pub fn create_device_node(ramfs_port: usize, vfs_port: usize, path: &[u8], dev_id: u32) -> VfsResponse {
+pub fn create_device_node(
+    ramfs_port: usize,
+    vfs_port: usize,
+    path: &[u8],
+    dev_id: u32,
+) -> VfsResponse {
     use gbsd::*;
 
     if ramfs_port == 0 {
@@ -235,7 +240,11 @@ pub fn create_device_node(ramfs_port: usize, vfs_port: usize, path: &[u8], dev_i
     ipc_buf[0..4].copy_from_slice(&9u32.to_le_bytes()); // mknod op
     ipc_buf[4..8].copy_from_slice(&(vfs_port as u32).to_le_bytes());
 
-    let path_len = path.iter().position(|&c| c == 0).unwrap_or(path.len()).min(256);
+    let path_len = path
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(path.len())
+        .min(256);
     ipc_buf[8..8 + path_len].copy_from_slice(&path[..path_len]);
 
     ipc_buf[264..268].copy_from_slice(&dev_id.to_le_bytes());
@@ -244,8 +253,14 @@ pub fn create_device_node(ramfs_port: usize, vfs_port: usize, path: &[u8], dev_i
         let mut resp_buf = [0u8; 512];
         if port_receive(vfs_port as u64, resp_buf.as_mut_ptr(), 512).is_ok() {
             let result = i64::from_le_bytes([
-                resp_buf[0], resp_buf[1], resp_buf[2], resp_buf[3],
-                resp_buf[4], resp_buf[5], resp_buf[6], resp_buf[7],
+                resp_buf[0],
+                resp_buf[1],
+                resp_buf[2],
+                resp_buf[3],
+                resp_buf[4],
+                resp_buf[5],
+                resp_buf[6],
+                resp_buf[7],
             ]);
 
             if result >= 0 {

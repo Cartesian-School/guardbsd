@@ -28,6 +28,12 @@ fn main() {
     println!("cargo:rerun-if-changed=../interrupt/timer_irq.S");
 
     cc::Build::new()
+        .file("../interrupt/syscall_entry.S")
+        .flag("-m64")
+        .compile("syscall_entry");
+    println!("cargo:rerun-if-changed=../interrupt/syscall_entry.S");
+
+    cc::Build::new()
         .file("../process/context_amd64.S")
         .flag("-m64")
         .compile("context");

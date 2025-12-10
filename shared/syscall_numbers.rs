@@ -52,12 +52,16 @@ pub const SYS_SIGNAL: usize = 40;
 pub const SYS_SIGACTION: usize = 41;
 pub const SYS_SIGPROCMASK: usize = 42;
 pub const SYS_SIGRETURN: usize = 43;
+pub const SYS_SIGNAL_REGISTER: usize = 44; // alias for signal(int, handler)
+pub const SYS_WAITPID: usize = 63;
 
 // Logging Syscalls
 pub const SYS_LOG_READ: usize = 50;
 pub const SYS_LOG_ACK: usize = 51;
 pub const SYS_LOG_REGISTER_DAEMON: usize = 52;
 
+// Service Registry
+pub const SYS_SERVICE_REGISTER: usize = 60;
+
 // Error code for unimplemented syscalls
 pub const ENOSYS: isize = -38;
-

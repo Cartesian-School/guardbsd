@@ -44,16 +44,18 @@ pub struct Process {
     // Resource tracking
     pub fd_table: [Option<FileDescriptor>; MAX_FD_PER_PROCESS],
     pub fd_count: usize,
-    pub memory_usage: usize,
-    pub memory_limit: usize,
+    pub memory_usage: u64,
+    pub memory_limit: u64,
+    pub exit_code: i32,
     
     // Scheduling (link to TCB in scheduler)
     pub thread_id: Option<usize>,
     
     // Signals
     pub pending_signals: u64,
+    pub killed: bool,
     pub signal_mask: u64,
-    pub signal_handlers: [SignalHandler; MAX_SIGNALS],
+    pub signal_handlers: [Option<u64>; MAX_SIGNALS],
 }
 
 impl Process {
@@ -81,8 +83,10 @@ impl Process {
             memory_limit: 0,
             thread_id: None,
             pending_signals: 0,
+            killed: false,
             signal_mask: 0,
-            signal_handlers: [SignalHandler::default(); MAX_SIGNALS],
+            signal_handlers: [None; MAX_SIGNALS],
+            exit_code: 0,
         }
     }
     
@@ -213,4 +217,3 @@ pub const SIGSTOP: i32 = 19;
 pub const SIGTSTP: i32 = 20;
 pub const SIGTTIN: i32 = 21;
 pub const SIGTTOU: i32 = 22;
-

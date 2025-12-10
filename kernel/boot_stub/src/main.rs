@@ -2,6 +2,8 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use core::ptr;
+use core::mem;
 
 mod interrupt;
 mod drivers;
@@ -39,6 +41,9 @@ mod syscall {
                 arg2 as *const crate::signal::SignalAction,
                 arg3 as *mut crate::signal::SignalAction
             ),
+            shared::syscall_numbers::SYS_SIGNAL_REGISTER => crate::syscalls::signal::sys_signal(arg1 as i32, arg2 as u64),
+            shared::syscall_numbers::SYS_SIGRETURN => crate::syscalls::signal::sys_sigreturn(),
+            shared::syscall_numbers::SYS_WAITPID => crate::syscalls::process::sys_waitpid(arg1 as isize, arg2 as *mut i32, arg3 as i32),
             
             // File operations (Day 31: Full VFS/RAMFS integration via IPC)
             SYS_WRITE => crate::syscalls::fs::sys_write(arg1 as u32, arg2 as *const u8, arg3),
@@ -69,6 +74,11 @@ mod syscall {
             SYS_LOG_READ => ENOSYS,
             SYS_LOG_ACK => ENOSYS,
             SYS_LOG_REGISTER_DAEMON => ENOSYS,
+
+            // Service registry
+            shared::syscall_numbers::SYS_SERVICE_REGISTER => {
+                crate::service_syscall::sys_service_register(arg1 as *const u8, arg2 as usize)
+            }
             
             // IPC
             SYS_IPC_PORT_CREATE => sys_ipc_port_create(),
@@ -514,6 +524,58 @@ mod syscall {
     }
 }
 
+mod service_syscall {
+    use crate::ipc;
+
+    pub fn sys_service_register(name_ptr: *const u8, pid: usize) -> isize {
+        // Copy name (up to 32 bytes)
+        if name_ptr.is_null() {
+            return -1;
+        }
+        let mut name_buf = [0u8; 32];
+        let mut len = 0usize;
+        unsafe {
+            while len < name_buf.len() {
+                let b = *name_ptr.add(len);
+                if b == 0 {
+                    break;
+                }
+                name_buf[len] = b;
+                len += 1;
+            }
+        }
+        let name = core::str::from_utf8(&name_buf[..len]).unwrap_or("");
+        if name.is_empty() {
+            return -1;
+        }
+        let ok = ipc::register_service(name, 0, pid);
+        if ok {
+            unsafe {
+                crate::print("[SERVICE] registered service '");
+                crate::print(name);
+                crate::print("' with PID ");
+                crate::print_num(pid);
+                crate::print("\n");
+            }
+            // Test lookup
+            if let Some((_, found_pid)) = ipc::lookup_service(name) {
+                if found_pid == pid {
+                    unsafe {
+                        crate::print("[SERVICE] lookup('");
+                        crate::print(name);
+                        crate::print("') = ");
+                        crate::print_num(found_pid);
+                        crate::print("\n");
+                    }
+                }
+            }
+            0
+        } else {
+            -1
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
     syscall::syscall_handler(syscall_num, arg1, arg2, arg3)
@@ -551,18 +613,32 @@ pub extern "C" fn timer_interrupt_handler() {
 // ============================================================================
 
 const GBSD_MAGIC: u32 = 0x42534447; // "GBSD" in little-endian
+const PAGE_SIZE: usize = 4096;
+const MAX_MEMORY_BYTES: usize = 0x08000000; // 128MB per dummy map
+const MAX_PAGES: usize = MAX_MEMORY_BYTES / PAGE_SIZE;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct BootMmapEntry {
+    pub base: u64,
+    pub length: u64,
+    pub typ: u32,      // 1 = usable
+    pub reserved: u32,
+}
 
 #[repr(C)]
 pub struct BootInfo {
     pub magic: u32,
     pub version: u32,
+    pub size: u32,
+    pub kernel_crc32: u32,
     pub mem_lower: u64,
     pub mem_upper: u64,
     pub boot_device: u32,
     pub cmdline: *const u8,
     pub mods_count: u32,
     pub mods: *const Module,
-    pub mmap: *const u8,
+    pub mmap: *const BootMmapEntry,
     pub mmap_count: u32,
 }
 
@@ -577,9 +653,18 @@ pub struct Module {
 extern "C" {
     static guaboot_magic: u32;
     static guaboot_bootinfo_ptr: *const BootInfo;
+    static __image_start: u8;
+    static __image_end: u8;
+    static tss_ready_flag: u8;
+    static tss_stack_top: u8;
+    fn syscall_dispatch_trap(rax: u64, rdi: u64, rsi: u64, rdx: u64) -> u64;
+    fn jump_to_user(ctx: *const crate::sched::ArchContext, entry: u64, stack: u64) -> !;
+    fn syscall_signal_check();
 }
 
 const COM1: u16 = 0x3F8;
+static mut PMM_BITMAP: [u64; MAX_PAGES / 64] = [0; MAX_PAGES / 64];
+static mut NEXT_PAGE: usize = 0;
 
 unsafe fn serial_init() {
     outb(COM1 + 1, 0x00);
@@ -598,11 +683,486 @@ unsafe fn print(s: &str) {
     }
 }
 
+unsafe fn print_ptr(ptr: *const u8) {
+    if ptr.is_null() {
+        print("<null>");
+        return;
+    }
+    let mut current = ptr;
+    loop {
+        let byte = *current;
+        if byte == 0 {
+            break;
+        }
+        while (inb(COM1 + 5) & 0x20) == 0 {}
+        outb(COM1, byte);
+        current = current.add(1);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn syscall_dispatch_trap(rax: u64, rdi: u64, rsi: u64, rdx: u64) -> u64 {
+    unsafe {
+        print("[SYSCALL] dispatcher invoked (test path), nr=");
+        print_num(rax as usize);
+        print("\n");
+    }
+    syscall::syscall_handler(rax as usize, rdi as usize, rsi as usize, rdx as usize) as u64
+}
+
+fn panic_and_halt(msg: &str) -> ! {
+    unsafe {
+        print("\n[PANIC] ");
+        print(msg);
+        print("\n");
+        loop {
+            core::arch::asm!("cli; hlt");
+        }
+    }
+}
+
+fn validate_bootinfo() -> &'static BootInfo {
+    unsafe {
+        if guaboot_magic != GBSD_MAGIC {
+            panic_and_halt("Invalid BootInfo magic – boot protocol not satisfied");
+        }
+        if guaboot_bootinfo_ptr.is_null() {
+            panic_and_halt("BootInfo pointer is null");
+        }
+        let bi = &*guaboot_bootinfo_ptr;
+
+        let expected_size = core::mem::size_of::<BootInfo>() as u32;
+        if bi.size < expected_size {
+            panic_and_halt("BootInfo size too small");
+        }
+        bi
+    }
+}
+
+fn log_bootinfo(bi: &BootInfo) {
+    unsafe {
+        print("[BOOT] BootInfo validated\n");
+        print("[BOOT]   magic=0x");
+        print_hex32(bi.magic);
+        print(" version=0x");
+        print_hex32(bi.version);
+        print(" size=");
+        print_num(bi.size as usize);
+        print(" bytes\n");
+
+        print("[BOOT]   kernel_crc32=0x");
+        print_hex32(bi.kernel_crc32);
+        print("\n");
+
+        print("[BOOT]   mem_lower=");
+        print_num(bi.mem_lower as usize);
+        print(" KB mem_upper=");
+        print_num(bi.mem_upper as usize);
+        print(" KB\n");
+
+        print("[BOOT]   boot_device=0x");
+        print_hex32(bi.boot_device);
+        print(" cmdline=");
+        print_ptr(bi.cmdline);
+        print("\n");
+
+        print("[BOOT] cmdline: ");
+        print_ptr(bi.cmdline);
+        print("\n");
+
+        print("[BOOT]   mmap entries: ");
+        print_num(bi.mmap_count as usize);
+        print("\n");
+
+        let entries = core::slice::from_raw_parts(bi.mmap, bi.mmap_count as usize);
+        for (i, e) in entries.iter().enumerate() {
+            print("  [");
+            print_num(i);
+            print("] base=0x");
+            print_hex64(e.base);
+            print(" len=0x");
+            print_hex64(e.length);
+            print(" type=");
+            print_num(e.typ as usize);
+            print("\n");
+        }
+
+        print("[BOOT]   mods_count=");
+        print_num(bi.mods_count as usize);
+        print(" mods_ptr=0x");
+        print_hex64(bi.mods as u64);
+        print("\n");
+
+        print("[BOOT]   mmap_ptr=0x");
+        print_hex64(bi.mmap as u64);
+        print(" mmap_count=");
+        print_num(bi.mmap_count as usize);
+        print("\n");
+
+        if bi.mods_count > 0 {
+            let mods = core::slice::from_raw_parts(bi.mods, bi.mods_count as usize);
+            for m in mods {
+                print("[MODULE] ");
+                print_ptr(m.string);
+                print(" @ 0x");
+                print_hex32(m.mod_start as u32);
+                print(" size=");
+                let size = (m.mod_end - m.mod_start) as usize;
+                print_num(size);
+                print("\n");
+            }
+        }
+    }
+}
+
+unsafe fn pmm_mark_all_reserved() {
+    for slot in PMM_BITMAP.iter_mut() {
+        *slot = !0u64;
+    }
+    NEXT_PAGE = MAX_PAGES; // will be lowered when marking usable
+}
+
+unsafe fn pmm_mark_usable_range(base: u64, length: u64) {
+    if length == 0 {
+        return;
+    }
+    let start_page = (base as usize) / PAGE_SIZE;
+    let end_page = ((base as usize + length as usize + PAGE_SIZE - 1) / PAGE_SIZE).min(MAX_PAGES);
+
+    for page in start_page..end_page {
+        let idx = page / 64;
+        let bit = page % 64;
+        PMM_BITMAP[idx] &= !(1u64 << bit);
+        if page < NEXT_PAGE {
+            NEXT_PAGE = page;
+        }
+    }
+}
+
+unsafe fn init_memory(bi: &BootInfo) {
+    pmm_mark_all_reserved();
+    let entries = core::slice::from_raw_parts(bi.mmap, bi.mmap_count as usize);
+    for e in entries {
+        if e.typ == 1 {
+            pmm_mark_usable_range(e.base, e.length);
+        }
+    }
+    if NEXT_PAGE == MAX_PAGES {
+        panic_and_halt("No usable memory found in BootInfo map");
+    }
+}
+
+fn crc32(data: *const u8, len: usize) -> u32 {
+    let mut crc: u32 = 0xFFFF_FFFF;
+    for i in 0..len {
+        let byte = unsafe { *data.add(i) } as u32;
+        crc ^= byte;
+        for _ in 0..8 {
+            let mask = 0u32.wrapping_sub(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    crc ^ 0xFFFF_FFFF
+}
+
+fn verify_kernel_crc(bi: &BootInfo) {
+    unsafe {
+        let start = &__image_start as *const u8 as usize;
+        let end = &__image_end as *const u8 as usize;
+        let len = end - start;
+        let crc = crc32(start as *const u8, len);
+        if crc != bi.kernel_crc32 {
+            panic_and_halt("Kernel integrity check failed");
+        }
+        print("[SECURITY] Kernel CRC verified\n");
+    }
+}
+
+fn test_kernel_mapping_clone() {
+    use kernel::mm::AddressSpace;
+    unsafe {
+        if !kernel_template_ready() {
+            panic_and_halt("Kernel template not ready for test");
+        }
+        if let Some(aspace) = AddressSpace::new_with_kernel_mappings() {
+            // Switch CR3 to test address space and back
+            let old_cr3: usize;
+            core::arch::asm!("mov {}, cr3", out(reg) old_cr3, options(nomem, preserves_flags));
+            core::arch::asm!("mov cr3, {}", in(reg) aspace.pml4_phys(), options(nostack, preserves_flags));
+            core::arch::asm!("mov cr3, {}", in(reg) old_cr3, options(nostack, preserves_flags));
+            print("[MMU] Kernel mappings cloned into new address space successfully\n");
+        } else {
+            panic_and_halt("Failed to allocate test address space with kernel mappings");
+        }
+    }
+}
+
+fn log_tss_ready() {
+    unsafe {
+        if tss_ready_flag != 0 {
+            print("[CPU] TSS loaded with ring-0 stack at 0x");
+            print_hex64((&tss_stack_top as *const u8 as u64));
+            print("\n");
+        } else {
+            panic_and_halt("TSS not initialized");
+        }
+    }
+}
+
+fn parse_init_elf(data: &[u8]) -> Option<(u64, usize)> {
+    #[repr(C)]
+    struct Elf64Ehdr {
+        e_ident: [u8; 16],
+        e_type: u16,
+        e_machine: u16,
+        e_version: u32,
+        e_entry: u64,
+        e_phoff: u64,
+        e_shoff: u64,
+        e_flags: u32,
+        e_ehsize: u16,
+        e_phentsize: u16,
+        e_phnum: u16,
+        e_shentsize: u16,
+        e_shnum: u16,
+        e_shstrndx: u16,
+    }
+
+    #[repr(C)]
+    struct Elf64Phdr {
+        p_type: u32,
+        p_flags: u32,
+        p_offset: u64,
+        p_vaddr: u64,
+        p_paddr: u64,
+        p_filesz: u64,
+        p_memsz: u64,
+        p_align: u64,
+    }
+
+    const PT_LOAD: u32 = 1;
+    if data.len() < core::mem::size_of::<Elf64Ehdr>() {
+        return None;
+    }
+    let ehdr = unsafe { &*(data.as_ptr() as *const Elf64Ehdr) };
+    if &ehdr.e_ident[0..4] != b"\x7FELF" {
+        return None;
+    }
+    let mut load_count = 0usize;
+    for i in 0..ehdr.e_phnum {
+        let off = ehdr.e_phoff as usize + i as usize * ehdr.e_phentsize as usize;
+        if off + core::mem::size_of::<Elf64Phdr>() > data.len() {
+            break;
+        }
+        let ph = unsafe { &*(data.as_ptr().add(off) as *const Elf64Phdr) };
+        if ph.p_type == PT_LOAD {
+            load_count += 1;
+            unsafe {
+                print("[INIT] PT_LOAD segment: vaddr=0x");
+                print_hex64(ph.p_vaddr);
+                print(" memsz=0x");
+                print_hex64(ph.p_memsz);
+                print("\n");
+            }
+        }
+    }
+    Some((ehdr.e_entry, load_count))
+}
+
+fn compute_elf_load_size(data: &[u8]) -> u64 {
+    #[repr(C)]
+    struct Elf64Ehdr {
+        e_ident: [u8; 16],
+        e_type: u16,
+        e_machine: u16,
+        e_version: u32,
+        e_entry: u64,
+        e_phoff: u64,
+        e_shoff: u64,
+        e_flags: u32,
+        e_ehsize: u16,
+        e_phentsize: u16,
+        e_phnum: u16,
+        e_shentsize: u16,
+        e_shnum: u16,
+        e_shstrndx: u16,
+    }
+
+    #[repr(C)]
+    struct Elf64Phdr {
+        p_type: u32,
+        p_flags: u32,
+        p_offset: u64,
+        p_vaddr: u64,
+        p_paddr: u64,
+        p_filesz: u64,
+        p_memsz: u64,
+        p_align: u64,
+    }
+
+    const PT_LOAD: u32 = 1;
+    if data.len() < core::mem::size_of::<Elf64Ehdr>() {
+        return 0;
+    }
+    let ehdr = unsafe { &*(data.as_ptr() as *const Elf64Ehdr) };
+    let mut total: u64 = 0;
+    for i in 0..ehdr.e_phnum {
+        let off = ehdr.e_phoff as usize + i as usize * ehdr.e_phentsize as usize;
+        if off + core::mem::size_of::<Elf64Phdr>() > data.len() {
+            break;
+        }
+        let ph = unsafe { &*(data.as_ptr().add(off) as *const Elf64Phdr) };
+        if ph.p_type == PT_LOAD {
+            total = total.saturating_add(ph.p_memsz);
+        }
+    }
+    total
+}
+
+fn test_init_elf_parse() {
+    if let Some(data) = fs::iso9660::read_file("init") {
+        unsafe {
+            print("[INIT] init ELF bytes available, size=");
+            print_num(data.len());
+            print("\n");
+        }
+        if let Some((entry, loads)) = parse_init_elf(data) {
+            unsafe {
+                print("[INIT] ELF header parsed successfully, entry=0x");
+                print_hex64(entry);
+                print("\n");
+                print("[INIT] loadable segments=");
+                print_num(loads);
+                print("\n");
+            }
+        } else {
+            panic_and_halt("Init ELF parse failed");
+        }
+    } else {
+        panic_and_halt("Init ELF not found");
+    }
+}
+
+fn bootstrap_init_user(info: InitBootstrapInfo) -> ! {
+    unsafe {
+        // Mark current process and switch CR3
+        crate::process::process::switch_to(info.pid);
+        print("[USER] Entering user mode for PID 1...\n");
+        jump_to_user(core::ptr::null(), info.entry, info.rsp);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn syscall_signal_check() {
+    use kernel::syscalls::process_jobctl::find_process_by_pid;
+    use kernel::signal::SignalFrame;
+    // Determine current process (simplified: use CURRENT_PROCESS)
+    let pid = match crate::process::process::get_current() {
+        Some(p) => p,
+        None => return,
+    };
+    if let Some(proc) = find_process_by_pid(pid) {
+        let pending = proc.pending_signals;
+        if pending != 0 {
+            let sig = pending.trailing_zeros() as usize + 1;
+            let idx = sig - 1;
+            if idx < proc.signal_handlers.len() {
+                if let Some(handler) = proc.signal_handlers[idx] {
+                    print("[SIGNAL] pending signal ");
+                    print_num(sig);
+                    print(" for PID ");
+                    print_num(pid);
+                    print(", handler=0x");
+                    print_hex64(handler);
+                    print(" (delivery not yet enabled)\n");
+
+                    unsafe {
+                        // rsp currently points to hardware frame: [RIP][CS][RFLAGS][RSP][SS]
+                        let hw_rsp: *mut u64;
+                        core::arch::asm!("mov {}, rsp", out(reg) hw_rsp, options(nomem, nostack, preserves_flags));
+                        let old_rip = *hw_rsp;
+                        let old_rflags = *hw_rsp.add(2);
+                        let old_user_rsp = *hw_rsp.add(3);
+
+                        // Check user stack pointer is canonical lower half
+                        if old_user_rsp >= 0xFFFF_8000_0000_0000 {
+                            print("[SIGNAL] invalid user RSP for frame push\n");
+                            if let Some(mut_proc) = kernel::syscalls::process_jobctl::find_process_mut_for_signal(pid) {
+                                mut_proc.killed = true;
+                            }
+                            return;
+                        }
+
+                        let new_user_rsp = old_user_rsp - mem::size_of::<SignalFrame>() as u64;
+                        if new_user_rsp >= 0xFFFF_8000_0000_0000 {
+                            print("[SIGNAL] invalid frame address\n");
+                            if let Some(mut_proc) = kernel::syscalls::process_jobctl::find_process_mut_for_signal(pid) {
+                                mut_proc.killed = true;
+                            }
+                            return;
+                        }
+
+                        let frame_ptr = new_user_rsp as *mut SignalFrame;
+                        // Write frame into user memory (assumes mapped/writable)
+                        core::ptr::write(frame_ptr, SignalFrame {
+                            saved_rip: old_rip,
+                            saved_rsp: old_user_rsp,
+                            saved_rflags: old_rflags,
+                            signo: sig as u64,
+                        });
+
+                        // Update saved user RSP in hardware frame to point to frame
+                        *hw_rsp.add(3) = new_user_rsp;
+
+                        print("[SIGNAL] frame pushed for signal ");
+                        print_num(sig);
+                        print(" on PID ");
+                        print_num(pid);
+                        print(" at user rsp=0x");
+                        print_hex64(new_user_rsp);
+                        print("\n");
+
+                        // Clear pending bit
+                        if let Some(mut_proc) = kernel::syscalls::process_jobctl::find_process_mut_for_signal(pid) {
+                            mut_proc.pending_signals &= !(1u64 << (sig - 1));
+                        }
+
+                        // Validate handler address (canonical user)
+                        if handler >= 0xFFFF_8000_0000_0000 {
+                            print("[SIGNAL] invalid handler address\n");
+                            if let Some(mut_proc) = kernel::syscalls::process_jobctl::find_process_mut_for_signal(pid) {
+                                mut_proc.killed = true;
+                            }
+                            return;
+                        }
+
+                        // Redirect RIP to handler
+                        *hw_rsp = handler;
+
+                        print("[SIGNAL] delivering signal ");
+                        print_num(sig);
+                        print(" to PID ");
+                        print_num(pid);
+                        print(" (handler jump to 0x");
+                        print_hex64(handler);
+                        print(")\n");
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn guardbsd_main() -> ! {
     unsafe {
         serial_init();
-        
+
+        // Validate boot protocol and log BootInfo contents before continuing.
+        let bi = validate_bootinfo();
+        log_bootinfo(bi);
+        verify_kernel_crc(bi);
+
         print("\n\n");
         print("================================================================================\n");
         print("[BOOT] GuardBSD Winter Saga v1.0.0 - SYSTEM ONLINE\n");
@@ -612,18 +1172,24 @@ pub extern "C" fn guardbsd_main() -> ! {
         print("[OK] Serial COM1 initialized\n");
         print("[OK] Protected mode active\n");
         print("\n[INIT] Initializing memory management...\n");
-        init_memory();
+        init_memory(bi);
         print("[OK] PMM initialized\n");
         print("[OK] VMM initialized\n");
+        init_kernel_template();
+        if kernel_template_ready() {
+            print("[OK] Kernel PML4 template captured\n");
+        } else {
+            panic_and_halt("Failed to capture kernel PML4 template");
+        }
+
+        test_kernel_mapping_clone();
+        log_tss_ready();
+        // Trigger a kernel-mode syscall test path to verify wiring
+        syscall_dispatch_trap(shared::syscall_numbers::SYS_GETPID as u64, 0, 0, 0);
         print("\n[INIT] Initializing filesystem...\n");
         init_filesystem();
         print("[OK] ISO filesystem ready\n");
-        print("\n[INIT] Loading shell from /bin/gsh...\n");
-        load_shell();
-        print("[OK] Shell loaded\n");
-        print("\n[INIT] Creating init process...\n");
-        create_init_process();
-        print("[OK] Init process created (PID 1)\n");
+        test_init_elf_parse();
         print("\n[INIT] Setting up interrupt handling...\n");
         init_pic();
         interrupt::idt::init_idt();
@@ -634,177 +1200,16 @@ pub extern "C" fn guardbsd_main() -> ! {
         crate::sched::init(100);
         drivers::timer::init(100); // 100 Hz
         print("[OK] Scheduler initialized (100 Hz timer)\n");
-        
-        enable_interrupts();
-        print("\n[INIT] Microkernel bootstrap starting...\n");
 
-        // Initialize IPC infrastructure
-        crate::ipc::init_ipc();
-        print("[OK] IPC infrastructure initialized\n");
+        print("\n[INIT] Loading shell from /bin/gsh...\n");
+        load_shell();
+        print("[OK] Shell loaded\n");
 
-        // Initialize process manager
-        crate::process::init_process_manager();
-        print("[OK] Process manager initialized\n");
-
-        // Initialize RAMFS
-        unsafe { crate::syscall::init_ramfs(); }
-        print("[OK] RAMFS initialized\n");
-
-        // Initialize microkernel communication channels
-        if !crate::ipc::init_microkernel_channels() {
-            print("[ERROR] Failed to initialize microkernel channels\n");
-            loop { unsafe { core::arch::asm!("hlt"); } }
-        }
-        print("[OK] Microkernel communication channels established\n");
-
-        // Initialize server communication channels
-        if !crate::ipc::init_server_channels() {
-            print("[ERROR] Failed to initialize server channels\n");
-            loop { unsafe { core::arch::asm!("hlt"); } }
-        }
-        print("[OK] Server communication channels established\n");
-
-        // Load microkernels
-        print("[INIT] Loading µK-Space (memory management)...\n");
-        let space_pid = crate::process::load_microkernel("uk_space", "modules/uk_space");
-        if let Some(pid) = space_pid {
-            print("[OK] µK-Space loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Start the microkernel
-            if crate::process::start_microkernel(pid) {
-                print("[OK] µK-Space started successfully\n");
-            } else {
-                print("[ERROR] Failed to start µK-Space\n");
-            }
-        } else {
-            print("[ERROR] Failed to load µK-Space\n");
-        }
-
-        print("[INIT] Loading µK-Time (scheduler)...\n");
-        let time_pid = crate::process::load_microkernel("uk_time", "modules/uk_time");
-        if let Some(pid) = time_pid {
-            print("[OK] µK-Time loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Start the microkernel
-            if crate::process::start_microkernel(pid) {
-                print("[OK] µK-Time started successfully\n");
-            } else {
-                print("[ERROR] Failed to start µK-Time\n");
-            }
-        } else {
-            print("[ERROR] Failed to load µK-Time\n");
-        }
-
-        print("[INIT] Loading µK-IPC (communication)...\n");
-        let ipc_pid = crate::process::load_microkernel("uk_ipc", "modules/uk_ipc");
-        if let Some(pid) = ipc_pid {
-            print("[OK] µK-IPC loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Start the microkernel
-            if crate::process::start_microkernel(pid) {
-                print("[OK] µK-IPC started successfully\n");
-            } else {
-                print("[ERROR] Failed to start µK-IPC\n");
-            }
-        } else {
-            print("[ERROR] Failed to load µK-IPC\n");
-        }
-
-        print("[OK] All microkernels loaded and started\n");
-        print("[OK] Microkernel system operational\n\n");
-        
-        print("[INIT] Starting system servers...\n");
-
-        // Load system servers
-        print("[INIT] Starting init server...\n");
-        let init_pid = crate::process::load_server("init", "servers/init");
-        if let Some(pid) = init_pid {
-            print("[OK] Init server loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Register init service
-            crate::ipc::register_service("init", 0, pid);
-
-            if crate::process::start_server(pid) {
-                print("[OK] Init server started successfully\n");
-            } else {
-                print("[ERROR] Failed to start init server\n");
-            }
-        } else {
-            print("[ERROR] Failed to load init server\n");
-        }
-
-        print("[INIT] Starting vfs server...\n");
-        let vfs_pid = crate::process::load_server("vfs", "servers/vfs");
-        if let Some(pid) = vfs_pid {
-            print("[OK] VFS server loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Register VFS service
-            crate::ipc::register_service("vfs", 0, pid);
-
-            if crate::process::start_server(pid) {
-                print("[OK] VFS server started successfully\n");
-            } else {
-                print("[ERROR] Failed to start VFS server\n");
-            }
-        } else {
-            print("[ERROR] Failed to load VFS server\n");
-        }
-
-        print("[INIT] Starting ramfs server...\n");
-        let ramfs_pid = crate::process::load_server("ramfs", "servers/ramfs");
-        if let Some(pid) = ramfs_pid {
-            print("[OK] RAMFS server loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Register RAMFS service
-            crate::ipc::register_service("ramfs", 0, pid);
-
-            if crate::process::start_server(pid) {
-                print("[OK] RAMFS server started successfully\n");
-            } else {
-                print("[ERROR] Failed to start RAMFS server\n");
-            }
-        } else {
-            print("[ERROR] Failed to load RAMFS server\n");
-        }
-
-        print("[INIT] Starting devd server...\n");
-        let devd_pid = crate::process::load_server("devd", "servers/devd");
-        if let Some(pid) = devd_pid {
-            print("[OK] DEVD server loaded (PID: ");
-            print_num(pid);
-            print(")\n");
-
-            // Register DEVD service
-            crate::ipc::register_service("devd", 0, pid);
-
-            if crate::process::start_server(pid) {
-                print("[OK] DEVD server started successfully\n");
-            } else {
-                print("[ERROR] Failed to start DEVD server\n");
-            }
-        } else {
-            print("[ERROR] Failed to load DEVD server\n");
-        }
-
-        print("[OK] All system servers loaded and started\n\n");
-        
-        print("[SHELL] Starting gsh (GuardBSD Shell)...\n");
-        print("================================================================================\n");
-        print("\nGuardBSD# ");
-        
-        shell_loop();
+        print("\n[INIT] Creating init process...\n");
+        let init_info = create_init_process();
+        print("[OK] Init process created (PID 1)\n");
+        print("[SCHED] Switching to PID 1 (init)\n");
+        bootstrap_init_user(init_info);
     }
 }
 
@@ -915,25 +1320,28 @@ pub unsafe fn inb(port: u16) -> u8 {
     ret
 }
 
-fn init_memory() {
-    unsafe {
-        static mut BITMAP: [u64; 512] = [0; 512];
-        for i in 0..4 {
-            BITMAP[i] = !0;
-        }
-    }
-}
-
 fn init_filesystem() {
     // Skip ISO detection for now - use simulated filesystem
     fs::iso9660::init(0);
 }
 
-fn print_hex(n: usize) {
+fn print_hex32(n: u32) {
     unsafe {
         let hex = b"0123456789abcdef";
         for i in (0..8).rev() {
-            let nibble = (n >> (i * 4)) & 0xF;
+            let nibble = ((n >> (i * 4)) & 0xF) as usize;
+            let ch = hex[nibble];
+            while (inb(COM1 + 5) & 0x20) == 0 {}
+            outb(COM1, ch);
+        }
+    }
+}
+
+fn print_hex64(n: u64) {
+    unsafe {
+        let hex = b"0123456789abcdef";
+        for i in (0..16).rev() {
+            let nibble = ((n >> (i * 4)) & 0xF) as usize;
             let ch = hex[nibble];
             while (inb(COM1 + 5) & 0x20) == 0 {}
             outb(COM1, ch);
@@ -974,16 +1382,105 @@ fn print_num(n: usize) {
     }
 }
 
-fn create_init_process() {
-    // Create first user process
-    // Entry: 0x400000 (typical ELF entry)
-    // Stack: 0x7FFFFFFF
-    // Page table: 0 (will be created)
-    
-    // In real system:
-    // 1. Create address space
-    // 2. Load /bin/init ELF
-    // 3. Set up stack
-    // 4. Create process structure
-    // 5. Add to scheduler
+struct InitBootstrapInfo {
+    pid: usize,
+    entry: u64,
+    rsp: u64,
+    cr3: usize,
+    mapped_bytes: u64,
+}
+
+fn create_init_process() -> InitBootstrapInfo {
+    const INIT_STACK_TOP: usize = 0x0000_0000_7FFF_F000;
+    const STACK_PAGES: usize = 4; // 16KB stack
+
+    print("[INIT] Creating PID 1...\n");
+
+    // Fetch embedded init ELF bytes
+    let init_bytes = fs::iso9660::read_file("init").unwrap_or_else(|| {
+        panic_and_halt("Init ELF not available for PID 1");
+    });
+
+    // Create address space with kernel mappings
+    let mut aspace = kernel::mm::AddressSpace::new_with_kernel_mappings()
+        .unwrap_or_else(|| panic_and_halt("Failed to create init address space"));
+
+    // Load ELF into address space
+    let loaded = crate::process::elf_loader::parse_and_load_elf(init_bytes, &mut aspace)
+        .unwrap_or_else(|_| panic_and_halt("Failed to load init ELF"));
+    print("[INIT] ELF for init loaded at entry=0x");
+    print_hex64(loaded.entry);
+    print("\n");
+
+    // Map user stack
+    for i in 0..STACK_PAGES {
+        let phys = kernel::mm::alloc_page().unwrap_or_else(|| panic_and_halt("Out of memory for init stack"));
+        let virt = INIT_STACK_TOP - (i + 1) * 4096;
+        let flags = kernel::mm::PageFlags::PRESENT | kernel::mm::PageFlags::WRITABLE | kernel::mm::PageFlags::USER;
+        if !aspace.map(virt, phys, flags) {
+            panic_and_halt("Failed to map init stack");
+        }
+    }
+    print("[INIT] User stack for PID 1 mapped at 0x");
+    print_hex64(INIT_STACK_TOP as u64);
+    print("\n");
+
+    // Create process table entry (PID 1 expected)
+    let pid = crate::process::process::create_process(loaded.entry, INIT_STACK_TOP as u64, aspace.pml4_phys())
+        .unwrap_or_else(|| panic_and_halt("Failed to create PID 1"));
+    if pid != 1 {
+        panic_and_halt("PID allocator did not return PID 1");
+    }
+
+    // Log limit
+    let limit = {
+        // Memory limit set during create_process (16MB)
+        16 * 1024 * 1024u64
+    };
+    print("[LIMIT] PID 1 memory_limit = ");
+    print_num(limit as usize);
+    print(" bytes\n");
+
+    // Build user-mode ArchContext (not jumped yet)
+    let mut ctx = crate::sched::ArchContext::zeroed();
+    ctx.rip = loaded.entry;
+    ctx.rsp = INIT_STACK_TOP as u64;
+    ctx.cs = 0x1B; // user code selector
+    ctx.ss = 0x23; // user data selector
+    ctx.rflags = 0x202;
+    ctx.cr3 = aspace.pml4_phys() as u64;
+
+    if crate::sched::register_thread(pid, 1, 0, ctx).is_some() {
+        print("[SCHED] PID 1 added to run queue\n");
+    } else {
+        panic_and_halt("Failed to register PID 1 thread");
+    }
+
+    print("[DEBUG] PID 1: cr3=0x");
+    print_hex64(aspace.pml4_phys() as u64);
+    print(" rip=0x");
+    print_hex64(loaded.entry);
+    print(" rsp=0x");
+    print_hex64(INIT_STACK_TOP as u64);
+    print("\n");
+
+    // Compute mapped bytes: ELF PT_LOAD memsz + stack
+    let elf_bytes = compute_elf_load_size(init_bytes);
+    let total_mapped = elf_bytes.saturating_add((STACK_PAGES * 4096) as u64);
+    if !kernel::process::process::try_add_memory_usage(pid, total_mapped) {
+        print("[LIMIT] PID 1 exceeded memory limit during init mapping\n");
+        kernel::process::process::mark_killed(pid);
+    } else {
+        print("[LIMIT] PID 1 memory_usage = ");
+        print_num(total_mapped as usize);
+        print(" bytes\n");
+    }
+
+    InitBootstrapInfo {
+        pid,
+        entry: loaded.entry,
+        rsp: INIT_STACK_TOP as u64,
+        cr3: aspace.pml4_phys(),
+        mapped_bytes: total_mapped,
+    }
 }

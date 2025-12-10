@@ -350,6 +350,17 @@ pub fn on_tick(cpu_id: usize, frame: &ArchContext) -> Option<*const ArchContext>
 
     if s.cpus[cpu_id].current.is_none() {
         if let Some(next) = s.cpus[cpu_id].rq.pop(&mut s.tcbs) {
+            // Skip killed tasks
+            if let Some(proc) = crate::syscalls::process_jobctl::find_process_by_pid(s.tcbs[next].pid) {
+                if proc.killed {
+                    crate::print("[SIGNAL] delivering fatal signal to PID ");
+                    crate::print_num(proc.pid as usize);
+                    crate::print(" (terminating)\n");
+                    s.tcbs[next].state = ThreadState::Zombie;
+                    s.cpus[cpu_id].current = None;
+                    return None;
+                }
+            }
             s.tcbs[next].state = ThreadState::Running;
             s.cpus[cpu_id].current = Some(next);
             let next_ctx = &s.tcbs[next].ctx as *const ArchContext;

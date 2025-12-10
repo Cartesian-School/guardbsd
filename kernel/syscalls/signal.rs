@@ -7,6 +7,7 @@
 use crate::signal::{Signal, SignalAction, send_signal, is_uncatchable};
 use crate::process::types::{Pid, ProcessState};
 use crate::syscalls::process::{find_process_mut, get_current_pid};
+use crate::signal::SignalFrame;
 
 // ==================== DAY 25: sys_kill() ====================
 
@@ -209,35 +210,95 @@ pub fn sys_signal(signo: Signal, handler: u64) -> isize {
     if signo <= 0 || signo > crate::signal::SIGMAX {
         return crate::signal::SIG_ERR as isize;
     }
-    
+
     // Check for uncatchable
     if is_uncatchable(signo) {
         return crate::signal::SIG_ERR as isize;
     }
-    
+
+    // Basic user-space address check: below canonical kernel base
+    if handler >= 0xFFFF_8000_0000_0000 {
+        return crate::signal::SIG_ERR as isize;
+    }
+
     // Get current process
     let current_pid = match get_current_pid() {
         Some(p) => p,
         None => return crate::signal::SIG_ERR as isize,
     };
-    
+
     let process = match find_process_mut(current_pid) {
         Some(p) => p,
         None => return crate::signal::SIG_ERR as isize,
     };
-    
+
     let handler_idx = (signo - 1) as usize;
     if handler_idx >= process.signal_handlers.len() {
         return crate::signal::SIG_ERR as isize;
     }
-    
+
     // Save old handler
-    let old_handler = process.signal_handlers[handler_idx].handler;
-    
+    let old_handler = process.signal_handlers[handler_idx].unwrap_or(0);
+
     // Set new handler
-    process.signal_handlers[handler_idx].handler = handler;
-    
+    process.signal_handlers[handler_idx] = Some(handler);
+
+    unsafe {
+        crate::print("[SIGNAL] PID ");
+        crate::print_num(current_pid as usize);
+        crate::print(" installed handler for signal ");
+        crate::print_num(signo as usize);
+        crate::print(" at 0x");
+        crate::print_hex64(handler);
+        crate::print("\n");
+    }
+
     old_handler as isize
+}
+
+/// Restore user context from a SignalFrame located on the user stack.
+/// This does not return to the caller in the traditional sense; it mutates
+/// the interrupt frame so iretq returns to the saved context.
+pub fn sys_sigreturn() -> isize {
+    // Get current process
+    let current_pid = match get_current_pid() {
+        Some(p) => p,
+        None => return -1,
+    };
+
+    // Locate hardware frame on kernel stack.
+    // int 0x80 pushes RIP,CS,RFLAGS,RSP,SS then stub pushes 15 GPRs.
+    let kstack_rsp: usize;
+    unsafe {
+        core::arch::asm!("mov {}, rsp", out(reg) kstack_rsp, options(nomem, nostack, preserves_flags));
+    }
+    // Hardware frame starts after 15 pushes (15*8 bytes)
+    let hw_frame = (kstack_rsp + 15 * 8) as *mut u64;
+    unsafe {
+        let user_rsp = *hw_frame.add(3);
+        // Basic user-space canonical check: below kernel base
+        if user_rsp >= 0xFFFF_8000_0000_0000 {
+            crate::print("[SIGNAL] sigreturn: invalid frame pointer\n");
+            if let Some(proc) = find_process_mut(current_pid) {
+                proc.killed = true;
+            }
+            return -1;
+        }
+        let frame_ptr = user_rsp as *const SignalFrame;
+        let frame = core::ptr::read(frame_ptr);
+
+        // Restore hardware frame fields
+        *hw_frame = frame.saved_rip;           // RIP
+        *hw_frame.add(2) = frame.saved_rflags; // RFLAGS
+        *hw_frame.add(3) = frame.saved_rsp;    // RSP
+
+        crate::print("[SIGNAL] sigreturn: restored context for PID ");
+        crate::print_num(current_pid as usize);
+        crate::print(" from frame at 0x");
+        crate::print_hex64(user_rsp as u64);
+        crate::print("\n");
+    }
+    0
 }
 
 // ==================== DAY 27: User Signal Handlers ====================
@@ -499,4 +560,3 @@ mod tests {
         // 5. Process continues after all handlers
     }
 }
-
