@@ -1,5 +1,9 @@
-// PIT Driver
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Sterownik programowalnego timera PIT w boot stubie.
 
 const PIT_CHANNEL0: u16 = 0x40;
 const PIT_COMMAND: u16 = 0x43;

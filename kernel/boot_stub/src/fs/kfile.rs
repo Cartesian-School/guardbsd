@@ -1,5 +1,9 @@
-// kernel/boot_stub/src/fs/kfile.rs
-// Kernel-internal file API built on VFS via kernel syscalls
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wewnętrzne API plików boot stuba oparte na VFS poprzez wywołania systemowe.
 
 #![allow(dead_code)]
 

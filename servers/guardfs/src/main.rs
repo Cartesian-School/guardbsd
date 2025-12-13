@@ -1,8 +1,9 @@
-// servers/guardfs/src/main.rs
-// GuardFS Server Main Loop
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergiej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: guardfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Główna pętla serwera GuardFS.
 
 #![no_std]
 #![no_main]

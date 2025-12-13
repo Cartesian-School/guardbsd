@@ -1,8 +1,9 @@
-// userland/shell/src/builtins.rs
-// Built-in shell commands
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wbudowane polecenia powłoki GuardBSD.
 
 use gbsd::*;
 
@@ -22,6 +23,7 @@ pub enum Builtin {
     Jobs,
     Klog,
     KlogFile,
+    KlogCheck,
 }
 
 impl Builtin {
@@ -42,6 +44,7 @@ impl Builtin {
             b"jobs" => Some(Builtin::Jobs),
             b"klog" | b"dmesg" => Some(Builtin::Klog),
             b"klogfile" | b"klogfs" => Some(Builtin::KlogFile),
+            b"klogcheck" => Some(Builtin::KlogCheck),
             _ => None,
         }
     }

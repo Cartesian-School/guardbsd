@@ -1,9 +1,10 @@
-/*
- * GuaBoot Stage 1 - BIOS Bootloader
- * BSD 3-Clause License
- * 
- * First stage bootloader for GuardBSD
- * Fits in 512-byte boot sector
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: guaboot_bios
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * GuaBoot stage 1 (BIOS) w sektorze 512 bajtów.
  */
 
 .code16

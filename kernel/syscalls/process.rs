@@ -1,6 +1,9 @@
-// Process Syscall Implementations
-// BSD 3-Clause License
-// Day 6: Basic sys_exit() implementation
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_syscalls
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Implementacje wywołań procesowych (sys_exit i kolejne).
 
 #![no_std]
 

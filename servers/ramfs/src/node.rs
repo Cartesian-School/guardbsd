@@ -1,8 +1,9 @@
-// servers/ramfs/src/node.rs
-// RAM filesystem node structure
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: ramfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Struktury węzłów systemu plików RAMFS.
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {

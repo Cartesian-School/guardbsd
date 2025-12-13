@@ -1,9 +1,10 @@
-/* GuardBSD Kernel Entry Point
- * BSD 3-Clause License
- * Copyright (c) 2025, GuardBSD Project
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: boot_stub
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * FreeBSD-compatible entry (NO multiboot)
- * Called by GuaBoot loader with bootinfo structure
+ * Wejście jądra wywoływane przez GuaBoot (bez multiboot).
  */
 
 .code64
@@ -18,6 +19,16 @@ _start:
      */
     cli                         /* Disable interrupts */
     cld                         /* Clear direction flag */
+
+    /* Patch TSS descriptor base into GDT before loading */
+    lea tss64(%rip), %rax
+    movw %ax, gdt64_tss_base0(%rip)
+    shr $16, %rax
+    movb %al, gdt64_tss_base1(%rip)
+    shr $8, %rax
+    movb %al, gdt64_tss_base2(%rip)
+    shr $8, %rax
+    movl %eax, gdt64_tss_base3(%rip)
 
     /* Load GDT with user segments and TSS descriptor */
     lgdt gdt64_ptr(%rip)
@@ -132,12 +143,16 @@ gdt64:
     .quad 0x00AFF2000000FFFF                  /* User data */
     /* TSS descriptor (16 bytes) */
     .word (tss64_end - tss64 - 1)
-    .word (tss64 & 0xFFFF)
-    .byte ((tss64 >> 16) & 0xFF)
+gdt64_tss_base0:
+    .word 0
+gdt64_tss_base1:
+    .byte 0
     .byte 0x89                                  /* Available 64-bit TSS */
-    .byte ((tss64 >> 24) & 0xFF)
+gdt64_tss_base2:
+    .byte 0
     .byte 0x00
-    .long (tss64 >> 32)
+gdt64_tss_base3:
+    .long 0
     .long 0
 
 .global gdt64_ptr

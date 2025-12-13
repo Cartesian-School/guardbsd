@@ -1,3 +1,10 @@
+<!--
+Project: GuardBSD Winter Saga version 1.0.0
+Package: README
+Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+License: BSD-3-Clause
+-->
+
 <p align="center">
   <img src="https://www.guardbsd.org/images/logo-main.png" alt="GuardBSD Logo" width="180">
 </p>

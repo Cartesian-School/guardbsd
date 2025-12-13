@@ -1,6 +1,9 @@
-// kernel/arch/x86_64/time.rs
-// HPET/PIT timer backend (simplified)
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Backend timera HPET/PIT (uproszczony) dla x86_64.
 
 #![no_std]
 

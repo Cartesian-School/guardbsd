@@ -1,8 +1,9 @@
-// userland/shell/src/jobs.rs
-// Job Control (bash/zsh-inspired)
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Kontrola zadań (inspirowana bash/zsh) w powłoce gsh.
 
 use gbsd::*;
 
@@ -13,6 +14,7 @@ pub enum JobState {
     Done,
 }
 
+#[derive(Copy, Clone, PartialEq)]
 pub struct Job {
     pub id: usize,
     pub pid: i32,
@@ -76,9 +78,9 @@ impl JobControl {
 
                 if background {
                     let _ = crate::io::print(b"[");
-                    let _ = self.print_number(job_id);
+                    let _ = JobControl::print_number(job_id);
                     let _ = crate::io::print(b"] ");
-                    let _ = self.print_number(pid as usize);
+                    let _ = JobControl::print_number(pid as usize);
                     let _ = crate::io::println(b"");
                 }
 
@@ -95,7 +97,7 @@ impl JobControl {
             if let Some(ref job) = job_opt {
                 // [1]+ 1234 Running    command
                 let _ = crate::io::print(b"[");
-                let _ = self.print_number(job.id);
+                let _ = JobControl::print_number(job.id);
                 let _ = crate::io::print(b"]");
 
                 // Mark current/previous job
@@ -105,7 +107,7 @@ impl JobControl {
                     let _ = crate::io::print(b"  ");
                 }
 
-                let _ = self.print_number(job.pid as usize);
+                let _ = JobControl::print_number(job.pid as usize);
                 let _ = crate::io::print(b" ");
 
                 match job.state {
@@ -128,20 +130,25 @@ impl JobControl {
 
     /// Bring job to foreground
     pub fn foreground(&mut self, job_id: usize) -> Result<()> {
-        let job = self.find_job_mut(job_id).ok_or(Error::NotFound)?;
+        let pid;
+        {
+            let job = self.find_job_mut(job_id).ok_or(Error::NotFound)?;
 
-        if job.state == JobState::Stopped {
-            // Resume stopped job
-            // TODO: Send SIGCONT to job.pid
-            job.state = JobState::Running;
+            if job.state == JobState::Stopped {
+                // Resume stopped job
+                // TODO: Send SIGCONT to job.pid
+                job.state = JobState::Running;
+            }
+
+            pid = job.pid;
         }
 
         self.foreground_job = Some(job_id);
-        let pid = job.pid;
 
         // Wait for job to complete
-        let mut status = 0;
-        gbsd::process::waitpid(pid, &mut status)?;
+        if let Some((_pid, _status)) = gbsd::process::waitpid(pid, 0)? {
+            // Status currently unused
+        }
 
         // Mark job as done
         if let Some(job) = self.find_job_mut(job_id) {
@@ -162,7 +169,7 @@ impl JobControl {
             job.state = JobState::Running;
 
             let _ = crate::io::print(b"[");
-            let _ = self.print_number(job.id);
+            let _ = JobControl::print_number(job.id);
             let _ = crate::io::print(b"]+ ");
             let _ = crate::io::println(&job.command[..job.cmd_len]);
         }
@@ -176,13 +183,13 @@ impl JobControl {
             if let Some(ref mut job) = self.jobs[i] {
                 if job.state == JobState::Running {
                     // Non-blocking wait
-                    let mut status = 0;
-                    // TODO: waitpid with WNOHANG
-                    if gbsd::process::waitpid(job.pid, &mut status).is_ok() {
+                    if let Ok(Some((_pid, _status))) =
+                        gbsd::process::waitpid(job.pid, gbsd::process::WNOHANG)
+                    {
                         job.state = JobState::Done;
 
                         let _ = crate::io::print(b"[");
-                        let _ = self.print_number(job.id);
+                        let _ = JobControl::print_number(job.id);
                         let _ = crate::io::print(b"]+ Done       ");
                         let _ = crate::io::println(&job.command[..job.cmd_len]);
                     }
@@ -212,7 +219,7 @@ impl JobControl {
         None
     }
 
-    fn print_number(&self, mut num: usize) -> Result<()> {
+    fn print_number(mut num: usize) -> Result<()> {
         if num == 0 {
             return crate::io::print(b"0");
         }

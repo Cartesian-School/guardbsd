@@ -1,5 +1,9 @@
-// Keyboard Driver Module
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_drivers
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Moduł sterownika klawiatury.
 
 pub mod ps2;
 

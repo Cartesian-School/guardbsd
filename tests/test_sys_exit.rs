@@ -1,6 +1,9 @@
-// Test for sys_exit() Implementation
-// BSD 3-Clause License
-// Day 6: Verify basic exit functionality
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_unit
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Test sys_exit() (dzień 6).
 
 #![no_std]
 #![no_main]
@@ -97,4 +100,3 @@ pub extern "C" fn _start() -> ! {
     test_main();
     loop {}
 }
-

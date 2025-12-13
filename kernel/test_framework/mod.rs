@@ -1,6 +1,9 @@
-// kernel/test_framework/mod.rs
-// Minimal Unit Test Framework for no_std Embedded Systems
-// ============================================================================
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_test_framework
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny framework testowy no_std.
 
 #![no_std]
 

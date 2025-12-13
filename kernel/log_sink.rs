@@ -1,5 +1,9 @@
-// kernel/log_sink.rs
-// Glue between kernel log backend and future file/VFS sink
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Klej między backendem logowania jądra a sinkiem plikowym/VFS.
 
 use crate::fs::kfile::{self, KFile, KfError, KfOpenFlags};
 use kernel_log::log_backend;

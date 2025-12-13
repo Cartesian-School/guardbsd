@@ -1,8 +1,10 @@
-/* GuardBSD Boot Entry Point with Multiboot Header
- * BSD 3-Clause License
- * Copyright (c) 2025, Cartesian School - Siergej Sobolewski
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: boot_stub
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * This MUST be the first code in the kernel for GRUB to find the multiboot header
+ * Punkt wejścia z nagłówkiem Multiboot; GRUB musi znaleźć go w pierwszych 8KB.
  */
 
 .code32                                     /* Force 32-bit code */
@@ -41,4 +43,3 @@ halt:
 stack_bottom:
     .skip 16384  /* 16KB stack */
 stack_top:
-

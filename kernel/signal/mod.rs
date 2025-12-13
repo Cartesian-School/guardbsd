@@ -1,6 +1,9 @@
-// Signal Module
-// BSD 3-Clause License
-// Days 22-24: Signal Infrastructure
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_signal
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Infrastruktura sygnałów (dni 22-24).
 
 #![no_std]
 
@@ -45,4 +48,3 @@ pub use handlers::{
     handle_sigterm, handle_sigkill, handle_sigstop,
     handle_sigcont, handle_sigchld,
 };
-

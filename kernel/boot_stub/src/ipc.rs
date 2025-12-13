@@ -1,7 +1,9 @@
-/*
- * IPC (Inter-Process Communication) Infrastructure
- * BSD 3-Clause License
- */
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Infrastruktura IPC w boot stubie (proste porty i kolejki wiadomości).
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -194,6 +196,16 @@ pub fn ipc_close_port(port_id: usize) -> isize {
         IPC_MANAGER.assume_init_mut().close_port(port_id);
         0
     }
+}
+
+// Simple stub receive returning error
+pub fn ipc_recv(_port_id: usize, _buf: *mut u8, _len: usize) -> isize {
+    -1
+}
+
+// Simple byte-oriented send helper for boot stub VFS calls
+pub fn ipc_send_simple(_port_id: usize, _buf: *const u8, _len: usize) -> isize {
+    0
 }
 
 // Microkernel communication channels

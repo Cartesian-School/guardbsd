@@ -1,8 +1,9 @@
-// tests/integration/process_integration_test.rs
-// Day 31: Basic Integration Tests - Process Management
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_integration
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Podstawowe testy integracyjne zarządzania procesami (dzień 31).
 
 #![no_std]
 #![no_main]
@@ -313,4 +314,3 @@ mod syscall_numbers {
     pub const SYS_GETPPID: usize = 5;
     pub const SYS_SLEEP: usize = 6;
 }
-

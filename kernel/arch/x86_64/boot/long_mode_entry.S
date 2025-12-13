@@ -1,5 +1,11 @@
-// kernel/arch/x86_64/boot/long_mode_entry.S
-// 64-bit long mode entry: enable paging/PAE/long mode, install GDT, jump to Rust.
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_x86_64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Wejście do long mode: włącza PAE/paging, instaluje GDT i skacze do Rust.
+ */
 
 .intel_syntax noprefix
 .section .text

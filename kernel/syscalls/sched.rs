@@ -1,6 +1,9 @@
-// kernel/syscalls/sched.rs
-// Sleep and yield syscalls
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_syscalls
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wywołania sleep i yield.
 
 #![no_std]
 

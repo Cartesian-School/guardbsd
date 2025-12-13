@@ -1,8 +1,9 @@
-// userland/libgbsd/src/syscall.rs
-// BSD-style syscall interface
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergiej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: libgbsd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Interfejs wywołań systemowych w stylu BSD.
 
 // Import canonical syscall numbers from shared module
 // This ensures userland and kernel always agree on syscall numbers

@@ -1,5 +1,11 @@
-// kernel/arch/x86_64/interrupts/timer_isr64.S
-// Timer ISR (vector 0x20) that builds a TrapFrameX86_64 and calls into Rust.
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_x86_64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * ISR timera (wektor 0x20) budujący TrapFrameX86_64 i wołający kod Rust.
+ */
 
 .intel_syntax noprefix
 .section .text

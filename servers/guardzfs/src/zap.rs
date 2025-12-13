@@ -1,8 +1,9 @@
-// servers/guardzfs/src/zap.rs
-// GuardZFS ZAP (ZFS Attribute Processor) - Directory Implementation
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: guardzfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! GuardZFS ZAP (ZFS Attribute Processor) — implementacja katalogów/kv.
 
 /// ZAP Entry - key/value pair for directory entries
 #[repr(C)]

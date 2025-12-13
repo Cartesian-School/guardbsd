@@ -1,5 +1,11 @@
-// kernel/arch/x86_64/interrupts/syscall_isr64.S
-// Syscall entry via int 0x80: build TrapFrameX86_64, call Rust dispatcher, return with iretq.
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_x86_64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Wejście syscall przez int 0x80: buduje TrapFrameX86_64 i wraca iretq.
+ */
 
 .intel_syntax noprefix
 .section .text

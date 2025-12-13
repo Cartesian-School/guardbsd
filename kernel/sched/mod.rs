@@ -1,6 +1,9 @@
-// kernel/sched/mod.rs
-// Preemptive scheduler core with arch contexts
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_sched
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Rdzeń planisty preempcyjnego wraz z kontekstami arch.
 
 #![no_std]
 

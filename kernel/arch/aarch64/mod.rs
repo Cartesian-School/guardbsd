@@ -1,5 +1,9 @@
-// kernel/arch/aarch64/mod.rs
-// AArch64 architecture glue: exception vectors, timer, and scheduler integration.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_aarch64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Glue architektury AArch64: wektory wyjątków, timer i integracja schedulera.
 
 #![cfg(target_arch = "aarch64")]
 #![allow(dead_code)]

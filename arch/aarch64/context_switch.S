@@ -1,8 +1,12 @@
-// arch/aarch64/context_switch.S
-// Full context switch for GuardBSD (AArch64)
-// Saves/restores x0-x30, SP, ELR, SPSR, TTBR0 and returns via eret.
-// ArchContext offsets (bytes):
-// x0 @0, x1 @8, ..., x30 @240, sp @248, elr @256, spsr @264, ttbr0 @272, esr @280
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_aarch64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Pełny kontekst przełączania AArch64 (x0-x30, SP, ELR, SPSR, TTBR0).
+ * Offsets: x0 @0, ..., x30 @240, sp @248, elr @256, spsr @264, ttbr0 @272, esr @280.
+ */
 
 .section .text
 .global arch_context_switch

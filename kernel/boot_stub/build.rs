@@ -1,3 +1,10 @@
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub_build
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Skrypt build.rs do kompilacji asemblera boot stuba.
+
 fn main() {
     // Build GuaBoot entry point (FreeBSD-style, NO multiboot)
     cc::Build::new()

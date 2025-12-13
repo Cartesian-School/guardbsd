@@ -1,5 +1,9 @@
-// kernel/arch/x86_64/interrupts/mod.rs
-// 64-bit interrupt support scaffolding.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Szkielet wsparcia przerwań 64-bitowych.
 
 #![cfg(target_arch = "x86_64")]
 

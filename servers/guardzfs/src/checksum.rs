@@ -1,8 +1,9 @@
-// servers/guardzfs/src/checksum.rs
-// GuardZFS Checksums (SHA-256)
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: guardzfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Sumy kontrolne GuardZFS (uproczone SHA-256).
 
 /// Simplified SHA-256 implementation
 /// Production systems should use a full crypto library

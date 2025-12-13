@@ -1,8 +1,9 @@
-// userland/shell/src/main.rs
-// GuardBSD Shell (gsh) - zsh-inspired
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Główny moduł powłoki GuardBSD (gsh) inspirowanej zsh.
 
 #![no_std]
 #![no_main]
@@ -20,6 +21,7 @@ mod spawn;
 use crate::completion::Completer;
 use crate::env::*;
 use crate::jobs::JobControl;
+use crate::io::print;
 use gbsd::*;
 
 const MAX_LINE: usize = 256;
@@ -28,6 +30,7 @@ const MAX_HISTORY: usize = 100;
 struct Shell {
     history: [Option<[u8; MAX_LINE]>; MAX_HISTORY],
     history_count: usize,
+    history_pos: usize,
     history_index: usize, // Current position in history (-1 means not navigating)
     current_line: [u8; MAX_LINE],
     line_pos: usize, // Current cursor position in line
@@ -46,6 +49,7 @@ impl Shell {
         Shell {
             history: [None; MAX_HISTORY],
             history_count: 0,
+            history_pos: 0,
             history_index: usize::MAX, // Not navigating history
             current_line: [0; MAX_LINE],
             line_pos: 0,

@@ -1,9 +1,10 @@
 /*
- * GuaBoot EFI Loader (Simplified Stub)
- * BSD 3-Clause License
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: guaboot_efi
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * Minimal EFI application that returns success.
- * Actual loading is handled by the BIOS bootloader chain.
+ * Minimalna aplikacja EFI GuaBoot (stub, zwraca sukces).
  */
 
 typedef unsigned long long UINTN;

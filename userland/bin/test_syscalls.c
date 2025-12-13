@@ -1,5 +1,11 @@
-// Syscall Test Program
-// BSD 3-Clause License
+/*
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: userland_tests
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Program testujący wywołania systemowe.
+ */
 
 // Syscall numbers
 #define SYS_EXIT   0

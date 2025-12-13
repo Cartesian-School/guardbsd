@@ -1,8 +1,9 @@
-// userland/shell/src/env.rs
-// Environment variable management
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Zarządzanie zmiennymi środowiskowymi w powłoce gsh.
 
 use gbsd::*;
 
@@ -11,8 +12,8 @@ const MAX_VAR_NAME: usize = 64;
 const MAX_VAR_VALUE: usize = 256;
 
 pub struct Environment {
-    vars: [Option<EnvVar>; MAX_VARS],
-    count: usize,
+    pub vars: [Option<EnvVar>; MAX_VARS],
+    pub count: usize,
 }
 
 #[derive(Clone, Copy)]

@@ -1,8 +1,9 @@
-// tests/system/system_tests.rs
-// Day 33: System-Level Integration Tests
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_system
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Testy integracji systemowej (dzień 33).
 
 #![no_std]
 #![no_main]
@@ -579,4 +580,3 @@ mod syscall_numbers {
     pub const SYS_IPC_SEND: usize = 31;
     pub const SYS_IPC_RECV: usize = 32;
 }
-

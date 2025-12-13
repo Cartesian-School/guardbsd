@@ -1,5 +1,9 @@
-// Process Module
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_process
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Moduł procesów (typy, loader ELF, zarządzanie procesami).
 
 #![no_std]
 

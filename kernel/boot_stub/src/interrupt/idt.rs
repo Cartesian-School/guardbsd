@@ -1,5 +1,9 @@
-// Interrupt Descriptor Table - x86_64
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Tablica deskryptorów przerwań (IDT) dla x86_64 w boot stubie.
 
 #[repr(C, packed)]
 #[derive(Copy, Clone)]

@@ -1,5 +1,11 @@
-/* Multiboot header - BSD 3-Clause License */
-/* MUST be in the first 8KB of the file for GRUB to find it */
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: boot_stub
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Nagłówek multiboot – musi być w pierwszych 8KB dla GRUB.
+ */
 .section .text
 .align 4
 

@@ -1,15 +1,22 @@
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_log
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Lekka biblioteka logowania dla komponentów jądra/mikrokerneli.
+
 #![no_std]
 
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::fmt::Write;
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_pointer_width = "64")]
+use core::sync::atomic::AtomicU64;
+#[cfg(not(target_pointer_width = "64"))]
+use core::sync::atomic::AtomicU32;
 
 // Recursion protection: per-CPU flag to prevent recursive logging
-#[cfg(target_arch = "x86_64")]
-static LOGGING_ACTIVE: AtomicBool = AtomicBool::new(false);
-
-#[cfg(target_arch = "aarch64")]
 static LOGGING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 // Tunables
@@ -155,10 +162,22 @@ impl LoggerCallbacks {
     }
 }
 
-static FALLBACK_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_pointer_width = "64")]
+type FallbackCounter = AtomicU64;
+#[cfg(not(target_pointer_width = "64"))]
+type FallbackCounter = AtomicU32;
+
+static FALLBACK_COUNTER: FallbackCounter = FallbackCounter::new(0);
 
 pub fn default_timestamp() -> u64 {
-    FALLBACK_COUNTER.fetch_add(1, Ordering::Relaxed)
+    #[cfg(target_pointer_width = "64")]
+    {
+        FALLBACK_COUNTER.fetch_add(1, Ordering::Relaxed)
+    }
+    #[cfg(not(target_pointer_width = "64"))]
+    {
+        FALLBACK_COUNTER.fetch_add(1, Ordering::Relaxed) as u64
+    }
 }
 
 #[must_use]

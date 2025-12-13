@@ -1,10 +1,15 @@
-// arch/x86_64/context_switch.S
-// Full context switch for GuardBSD (x86_64)
-// Saves/restores GPRs, switches CR3, returns with iretq using ArchContext layout.
-// Offsets (bytes) in ArchContext:
-// r15 0, r14 8, r13 16, r12 24, r11 32, r10 40, r9 48, r8 56,
-// rdi 64, rsi 72, rbp 80, rbx 88, rdx 96, rcx 104, rax 112,
-// rsp 120, rip 128, rflags 136, cs 144, ss 152, cr3 160, mode_flags 168.
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_x86_64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Pełny kontekst przełączania dla x86_64 (GuardBSD).
+ * Offsets (bytes) in ArchContext:
+ * r15 0, r14 8, r13 16, r12 24, r11 32, r10 40, r9 48, r8 56,
+ * rdi 64, rsi 72, rbp 80, rbx 88, rdx 96, rcx 104, rax 112,
+ * rsp 120, rip 128, rflags 136, cs 144, ss 152, cr3 160, mode_flags 168.
+ */
 
 .intel_syntax noprefix
 .section .text

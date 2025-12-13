@@ -1,6 +1,9 @@
-// Signal Types and Constants
-// BSD 3-Clause License
-// Day 22: Signal Infrastructure
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_signal
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Typy i stałe sygnałów (dzień 22).
 
 #![no_std]
 

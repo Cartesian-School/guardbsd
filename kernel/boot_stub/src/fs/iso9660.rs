@@ -1,5 +1,9 @@
-// ISO 9660 Filesystem Reader
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny czytnik systemu plików ISO 9660 używany przez boot stub.
 
 const SECTOR_SIZE: usize = 2048;
 
@@ -23,7 +27,7 @@ static mut ROOT_SIZE: u32 = 0;
 
 // Embedded init ELF for boot-time loading when no real ISO is present.
 // Path is relative to boot_stub/src/.
-static INIT_ELF: &[u8] = include_bytes!("../../../servers/init/init_min.bin");
+static INIT_ELF: &[u8] = include_bytes!("../../../../servers/init/init_min.bin");
 
 pub fn init(base: usize) {
     unsafe {

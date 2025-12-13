@@ -1,8 +1,9 @@
-// userland/devtest/src/main.rs
-// Device Driver Framework Test
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: devtest
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Testy frameworka sterowników urządzeń (userland).
 
 #![no_std]
 #![no_main]

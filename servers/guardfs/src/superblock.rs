@@ -1,8 +1,9 @@
-// servers/guardfs/src/superblock.rs
-// GuardFS Superblock Management
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: guardfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Zarządzanie superblokiem GuardFS.
 
 pub const GUARDFS_MAGIC: &[u8; 8] = b"GUARDFS\0";
 pub const GUARDFS_VERSION: u32 = 1;

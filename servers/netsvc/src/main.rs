@@ -1,8 +1,9 @@
-// servers/netsvc/src/main.rs
-// GuardBSD Network Services Server
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: netsvc
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Serwer usług sieciowych GuardBSD (DHCP/DNS/HTTP szkielety).
 
 #![no_std]
 #![no_main]

@@ -1,6 +1,9 @@
-// Console TTY Driver with Line Discipline
-// BSD 3-Clause License
-// Provides canonical line editing, echo, and buffering for /dev/console
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_drivers
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Sterownik TTY konsoli z line discipline (echo, edycja, buforowanie).
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -204,4 +207,3 @@ fn send_signal_to_pgid(pgid: usize, sig: i32) {
         }
     }
 }
-

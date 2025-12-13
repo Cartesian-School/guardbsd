@@ -1,6 +1,9 @@
-// kernel/sched/context_switch.rs
-// FFI adapter to architecture assembly context switch
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_sched
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Adapter FFI do asemblerowego przełączania kontekstu.
 
 #![no_std]
 

@@ -1,5 +1,9 @@
-// Interrupt Descriptor Table - legacy x86 (32-bit)
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_interrupt
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Tablica deskryptorów przerwań (legacy x86 32-bit).
 
 #![no_std]
 #![cfg(feature = "x86_legacy")]

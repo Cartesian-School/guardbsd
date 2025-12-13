@@ -1,6 +1,9 @@
-// Signal Delivery Implementation
-// BSD 3-Clause License
-// Day 23: Signal Delivery
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_signal
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Implementacja dostarczania sygnałów (dzień 23).
 
 #![no_std]
 
@@ -305,4 +308,3 @@ mod tests {
         // 3. Same for SIGSTOP
     }
 }
-

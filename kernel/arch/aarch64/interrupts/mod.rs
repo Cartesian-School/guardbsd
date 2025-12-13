@@ -1,5 +1,9 @@
-// kernel/arch/aarch64/interrupts/mod.rs
-// Exception vector and timer integration for AArch64.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_aarch64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Integracja wektorów wyjątków i timera dla AArch64.
 
 #![cfg(target_arch = "aarch64")]
 

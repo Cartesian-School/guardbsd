@@ -1,6 +1,9 @@
-// kernel/proc/mod.rs
-// Minimal PID model
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_proc
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny model PID.
 
 use core::sync::atomic::{AtomicU32, Ordering};
 

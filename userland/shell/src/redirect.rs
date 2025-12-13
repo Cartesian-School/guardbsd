@@ -1,8 +1,9 @@
-// userland/shell/src/redirect.rs
-// Pipes & Redirection (bash/zsh-inspired)
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Potoki i przekierowania (inspiracja bash/zsh) w gsh.
 
 use gbsd::*;
 

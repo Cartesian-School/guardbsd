@@ -1,8 +1,9 @@
-// servers/devd/src/device.rs
-// Device abstraction
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: devd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Abstrakcja urządzeń w serwerze devd.
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DeviceType {

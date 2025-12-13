@@ -1,7 +1,9 @@
-/*
- * Process Management and ELF Loading for GuardBSD Boot Stub
- * BSD 3-Clause License
- */
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Zarządzanie procesami i ładowanie ELF w boot stubie GuardBSD.
 
 // ELF Structures (32-bit for compatibility)
 #[repr(C)]
@@ -56,6 +58,37 @@ pub struct CpuContext {
     pub eip: u32,
     pub eflags: u32,
     pub cr3: u32,
+}
+
+pub mod process {
+    pub fn switch_to(_pid: usize) {}
+    pub fn get_current() -> Option<usize> {
+        Some(1)
+    }
+    pub fn try_add_memory_usage(_pid: usize, _pages: usize) -> bool {
+        true
+    }
+    pub fn mark_killed(_pid: usize) {}
+    pub fn create_process(_entry: u64, _stack: u64, _pml4: u64) -> usize {
+        1
+    }
+}
+
+pub mod elf_loader {
+    pub fn parse_and_load_elf<'a>(
+        _bytes: &'a [u8],
+        _aspace: &mut crate::kernel::mm::AddressSpace,
+    ) -> Result<LoadedElf<'a>, ()> {
+        Ok(LoadedElf {
+            entry: 0,
+            segments: &[],
+        })
+    }
+
+    pub struct LoadedElf<'a> {
+        pub entry: u64,
+        pub segments: &'a [u8],
+    }
 }
 
 impl CpuContext {

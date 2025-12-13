@@ -1,5 +1,9 @@
-// userland/logd/src/main.rs
-// Kernel log daemon: pulls ring buffer records and emits to serial/FS.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: logd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Demon logów jądra: odczytuje ring buffer i wypisuje na serial/dysk.
 
 #![no_std]
 #![no_main]

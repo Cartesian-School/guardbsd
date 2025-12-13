@@ -1,6 +1,9 @@
-// userland/libgbsd/src/log.rs
-// Kernel logging syscall bridge
-// ============================================================================
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: libgbsd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Pomost do logowania jądra przez wywołania systemowe.
 
 pub use kernel_log::{LogLevel, UserLogRecord, LOG_MSG_MAX, LOG_RING_SIZE, LOG_SUBSYS_MAX};
 use crate::syscall;

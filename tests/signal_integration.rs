@@ -1,6 +1,9 @@
-// Signal Integration Tests
-// BSD 3-Clause License
-// Day 28: Signal Testing & Integration
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_integration
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Testy integracyjne sygnałów (dzień 28).
 
 #![no_std]
 
@@ -574,4 +577,3 @@ mod signal_integration_tests {
         // Expected: SIGINT caught, user prompted, program continues or exits
     }
 }
-

@@ -1,6 +1,9 @@
-// kernel/arch/aarch64/time.rs
-// ARM Generic Timer backend (simplified)
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_aarch64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Uproszczony backend ARM Generic Timer.
 
 #![no_std]
 

@@ -1,5 +1,9 @@
-// Integration Tests - Days 29-30: Component Integration
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_integration
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Testy integracyjne (dni 29-30): integracja komponentów syscalls/timer.
 
 #![no_std]
 
@@ -574,4 +578,3 @@ mod component_integration_tests {
         // Within 20% of average
     }
 }
-

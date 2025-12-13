@@ -1,5 +1,9 @@
-// Physical Memory Manager - Minimal Bitmap Allocator
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_mm
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny alokator bitmapowy pamięci fizycznej.
 
 #![no_std]
 

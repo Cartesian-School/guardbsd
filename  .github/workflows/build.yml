@@ -1,4 +1,9 @@
 # .github/workflows/build.yml
+# Project: GuardBSD Winter Saga version 1.0.0
+# Package: ci_build
+# Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+# License: BSD-3-Clause
+
 name: Build and Test
 
 on:
@@ -50,14 +55,16 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            target: x86_64-unknown-gbsd.json
+            target: x86_64-cartesian-gbsd.json
             packages: qemu-system-x86 xorriso mtools
-            artifact_name: gbsd-x86_64.iso
+            artifact_name: guardbsd-saga-x86_64.iso
+            artifact_path: build/x86_64/guardbsd-saga-x86_64.iso
             build_script_arg: x86_64
           - arch: aarch64
-            target: aarch64-unknown-gbsd.json
+            target: aarch64-cartesian-gbsd.json
             packages: qemu-system-aarch64 gcc-aarch64-linux-gnu
-            artifact_name: gbsd-aarch64.bin
+            artifact_name: guardbsd-aarch64.iso
+            artifact_path: build/aarch64/guardbsd-aarch64.iso
             build_script_arg: aarch64
 
     steps:
@@ -89,8 +96,8 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gbsd-${{ matrix.arch }}-artifact
-          path: build/${{ matrix.artifact_name }}
+          name: guardbsd-${{ matrix.arch }}-artifact
+          path: ${{ matrix.artifact_path }}
           retention-days: 7
 
   test:
@@ -115,8 +122,8 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: gbsd-${{ matrix.arch }}-artifact
-          path: build/
+          name: guardbsd-${{ matrix.arch }}-artifact
+          path: .
       
       - name: Run QEMU Test
         run: |

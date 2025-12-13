@@ -1,11 +1,12 @@
-// userland/libgbsd/src/ipc.rs
-// IPC system call wrappers
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: libgbsd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Opakowania wywołań systemowych IPC dla biblioteki GuardBSD.
 
 use crate::error::{Error, Result};
-use crate::syscall::{syscall0, syscall2, syscall3};
+use crate::syscall::{syscall0, syscall3};
 
 // Import IPC syscall numbers
 include!("../../../shared/syscall_numbers.rs");

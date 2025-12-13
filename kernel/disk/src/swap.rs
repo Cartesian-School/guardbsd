@@ -1,8 +1,9 @@
-// kernel/disk/src/swap.rs
-// Linux Swap Partition Support
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: disk
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Obsługa partycji swap (format Linux).
 
 #![no_std]
 

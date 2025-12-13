@@ -1,5 +1,11 @@
-// arch/aarch64/interrupts/timer_isr.S
-// Timer ISR that drives scheduler tick and context switch
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_aarch64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * ISR timera napędzająca tick i przełączanie kontekstu na AArch64.
+ */
 
 .section .text
 .global timer_isr

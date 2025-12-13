@@ -1,9 +1,9 @@
-// shared/syscall_numbers.rs
-// Canonical Syscall Number Definitions for GuardBSD
-// BSD 3-Clause License
-//
-// This is the SINGLE source of truth for all syscall numbers.
-// All kernel and userland code MUST use these constants.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shared
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Kanoniczne numery wywołań systemowych GuardBSD (źródło prawdy dla kernela i userlandu).
 
 
 // Process Management Syscalls
@@ -53,7 +53,6 @@ pub const SYS_SIGACTION: usize = 41;
 pub const SYS_SIGPROCMASK: usize = 42;
 pub const SYS_SIGRETURN: usize = 43;
 pub const SYS_SIGNAL_REGISTER: usize = 44; // alias for signal(int, handler)
-pub const SYS_WAITPID: usize = 63;
 
 // Logging Syscalls
 pub const SYS_LOG_READ: usize = 50;

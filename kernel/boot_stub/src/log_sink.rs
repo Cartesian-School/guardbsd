@@ -1,5 +1,9 @@
-// kernel/boot_stub/src/log_sink.rs
-// Glue between kernel log backend and future file/VFS sink (stubbed)
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Klej między backendem logowania a przyszłym sinkiem plikowym/VFS (stub).
 
 use crate::fs::kfile::{self, KFile, KfError, KfOpenFlags};
 use kernel_log::log_backend;
@@ -17,6 +21,7 @@ pub fn init_klog_file_sink() {
         Ok(file) => unsafe {
             KLOG_FILE = Some(file);
             log_backend::set_external_sink(Some(klog_sink_write));
+            log_backend::write_bytes(b"[KLOG-TEST] persistent sink marker\n");
         },
         Err(KfError::NotImplemented) => {
             // VFS not wired yet; leave external sink unset.

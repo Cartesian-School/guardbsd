@@ -1,6 +1,9 @@
-// tests/integration/capability_integration.rs
-// Integration Tests for Capability System
-// ============================================================================
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_integration
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Testy integracyjne systemu capability.
 
 #[cfg(test)]
 mod capability_integration_tests {

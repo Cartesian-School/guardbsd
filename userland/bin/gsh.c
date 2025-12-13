@@ -1,5 +1,11 @@
-// GuardBSD Shell - Minimal ELF Binary
-// BSD 3-Clause License
+/*
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: userland_gsh
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Minimalny ELF powłoki (gsh) dla testów ISO.
+ */
 
 void _start() {
     const char *msg = "Shell loaded from ISO!\n";

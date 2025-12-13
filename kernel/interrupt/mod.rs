@@ -1,5 +1,9 @@
-// Interrupt Module (legacy x86 only)
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_interrupt
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Moduł przerwań (tylko legacy x86).
 
 #![cfg(feature = "x86_legacy")]
 

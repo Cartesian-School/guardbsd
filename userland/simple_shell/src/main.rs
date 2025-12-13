@@ -1,3 +1,10 @@
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: simple_shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalna przykładowa powłoka (syscall write).
+
 #![no_std]
 #![no_main]
 

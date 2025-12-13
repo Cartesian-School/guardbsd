@@ -1,5 +1,9 @@
-// kernel/arch/x86_64/interrupts/syscall_isr.rs
-// Syscall dispatcher that operates on TrapFrameX86_64 and integrates with scheduler.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Dyspozytor syscalls na TrapFrameX86_64 z integracją schedulera.
 
 #![cfg(target_arch = "x86_64")]
 

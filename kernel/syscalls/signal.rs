@@ -1,6 +1,9 @@
-// Signal Syscalls Implementation
-// BSD 3-Clause License
-// Days 25-27: Signal Syscalls
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_syscalls
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wywołania systemowe sygnałów (dni 25-27).
 
 #![no_std]
 

@@ -1,5 +1,9 @@
-// kernel/tests/preempt_threads.rs
-// Four kernel threads to exercise preemptive scheduling and syscalls.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_tests
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Cztery wątki kernelowe do ćwiczenia preempcji i syscalls.
 
 #![cfg(target_arch = "x86_64")]
 #![allow(dead_code)]

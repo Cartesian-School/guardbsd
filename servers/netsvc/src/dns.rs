@@ -1,8 +1,9 @@
-// servers/netsvc/src/dns.rs
-// DNS client implementation
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: netsvc
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Implementacja klienta DNS (szkielet).
 
 #[derive(Copy, Clone)]
 pub struct DnsQuery {

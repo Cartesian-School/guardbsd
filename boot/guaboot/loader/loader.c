@@ -1,9 +1,10 @@
 /*
- * GuaBoot Loader - Main Loader Implementation
- * BSD 3-Clause License
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: guaboot_loader
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * Loads kernel and modules according to guaboot.conf
- * Implements ELF loading for proper kernel bootstrapping
+ * Główny loader GuaBoot (ładowanie ELF, guaboot.conf).
  */
 
 #include <stdint.h>

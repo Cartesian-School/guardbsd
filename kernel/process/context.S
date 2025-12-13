@@ -1,5 +1,11 @@
-// Context Switch - x86 Assembly (32-bit)
-// BSD 3-Clause License
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_process
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Przełączanie kontekstu (x86 32-bit).
+ */
 
 .section .text
 .global context_switch

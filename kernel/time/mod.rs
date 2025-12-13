@@ -1,6 +1,9 @@
-// kernel/time/mod.rs
-// Timer abstraction with arch backends
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_time
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Abstrakcja timera z backendami architektury.
 
 #![no_std]
 

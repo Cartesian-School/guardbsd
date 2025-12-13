@@ -1,10 +1,10 @@
 /*
- * GuaBoot UEFI Loader
- * BSD 3-Clause License
- * Copyright (c) 2025, GuardBSD Project
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: guaboot_efi
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * UEFI application that loads GuardBSD kernel
- * Minimal, production-ready implementation
+ * UEFI loader GuaBoot ładujący jądro GuardBSD (minimalny).
  */
 
 #include <efi.h>

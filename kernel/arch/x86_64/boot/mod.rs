@@ -1,5 +1,9 @@
-// kernel/arch/x86_64/boot/mod.rs
-// Long-mode entry declarations for x86_64.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Deklaracje wejścia long-mode dla x86_64.
 
 #![cfg(target_arch = "x86_64")]
 

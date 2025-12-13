@@ -1,5 +1,9 @@
-// kernel/arch/x86_64/interrupts/gdt64.rs
-// Minimal 64-bit GDT setup for long mode.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny setup GDT 64-bit dla long mode.
 
 #![cfg(target_arch = "x86_64")]
 

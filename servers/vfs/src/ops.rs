@@ -1,8 +1,9 @@
-// servers/vfs/src/ops.rs
-// VFS operations
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: vfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Operacje VFS obsługiwane przez serwer VFS.
 
 use crate::vnode::*;
 use gbsd::*;
@@ -135,6 +136,7 @@ pub fn process_vfs_request(
         match mount.mount_type {
             crate::MountType::RamFs => {
                 // Forward to RAMFS server via IPC
+                klog_info!("vfs", "forward to ramfs path='{}' op={:?}", path, req.op as u32);
                 return forward_to_ramfs(req, mount.port, vfs_port);
             }
             crate::MountType::DevFs => {

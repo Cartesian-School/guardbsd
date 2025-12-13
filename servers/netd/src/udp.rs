@@ -1,8 +1,9 @@
-// servers/netd/src/udp.rs
-// UDP protocol implementation
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: netd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Implementacja protokołu UDP (szkielet).
 
 pub struct UdpDatagram {
     pub src_port: u16,

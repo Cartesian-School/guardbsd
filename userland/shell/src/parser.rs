@@ -1,8 +1,9 @@
-// userland/shell/src/parser.rs
-// Command parser (zsh-inspired) with quotes and escaping
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Parser poleceń z obsługą cudzysłowów i escape (inspirowany zsh).
 
 pub struct Command<'a> {
     pub name: &'a [u8],

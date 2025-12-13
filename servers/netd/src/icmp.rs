@@ -1,8 +1,9 @@
-// servers/netd/src/icmp.rs
-// ICMP protocol implementation
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: netd
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Implementacja protokołu ICMP (szkielet).
 
 pub const ICMP_ECHO_REPLY: u8 = 0;
 pub const ICMP_ECHO_REQUEST: u8 = 8;

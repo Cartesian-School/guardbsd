@@ -1,5 +1,9 @@
-// userland/init/src/main.rs
-// GuardBSD init process: minimal bootstrap
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: init
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny proces init userlandu (bootstrap).
 
 #![no_std]
 #![no_main]

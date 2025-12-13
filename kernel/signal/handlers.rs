@@ -1,6 +1,9 @@
-// Default Signal Handlers
-// BSD 3-Clause License
-// Day 24: Default Signal Handlers
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_signal
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Domyślne obsługi sygnałów (dzień 24).
 
 #![no_std]
 
@@ -344,4 +347,3 @@ mod tests {
         //   fg command sends SIGCONT
     }
 }
-

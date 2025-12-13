@@ -1,8 +1,9 @@
-// userland/shell/src/spawn.rs
-// Process Spawning (fork/exec)
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Uruchamianie procesów (fork/exec) w gsh.
 
 use crate::env::Environment;
 use crate::parser::Command;
@@ -54,10 +55,10 @@ impl ProcessSpawner {
 
         // Default PATH
         if self.path_count == 0 {
-            self.path_dirs[0] =
-                *b"/bin\0                                                          ";
-            self.path_dirs[1] =
-                *b"/usr/bin\0                                                      ";
+            self.path_dirs[0] = [0; 64];
+            self.path_dirs[0][..5].copy_from_slice(b"/bin\0");
+            self.path_dirs[1] = [0; 64];
+            self.path_dirs[1][..9].copy_from_slice(b"/usr/bin\0");
             self.path_count = 2;
         }
     }
@@ -156,7 +157,7 @@ impl ProcessSpawner {
         argv_ptrs[argv_count] = core::ptr::null();
 
         // Execute
-        let _ = gbsd::process::exec(path, argv_ptrs.as_ptr());
+        let _ = gbsd::process::exec(path.as_ptr(), argv_ptrs.as_ptr());
 
         // If we get here, exec failed
         let _ = crate::io::println(b"exec: command not found");
@@ -164,8 +165,10 @@ impl ProcessSpawner {
 
     /// Wait for child process to complete
     pub fn wait(&self, pid: i32) -> Result<i32> {
-        let mut status = 0;
-        gbsd::process::waitpid(pid, &mut status)?;
-        Ok(status)
+        if let Some((_pid, status)) = gbsd::process::waitpid(pid, 0)? {
+            Ok(status)
+        } else {
+            Ok(0)
+        }
     }
 }

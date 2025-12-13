@@ -1,6 +1,9 @@
-// Filesystem Syscall Implementations
-// BSD 3-Clause License
-// File descriptor syscalls: open, read, write, close
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_syscalls
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wywołania systemowe systemu plików (open/read/write/close).
 
 #![no_std]
 
@@ -389,4 +392,3 @@ pub fn sys_tcgetpgrp(_fd: u32) -> isize {
     // For now, only support /dev/console (ignore fd)
     crate::drivers::console::get_foreground_pgid() as isize
 }
-

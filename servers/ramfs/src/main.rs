@@ -1,8 +1,9 @@
-// servers/ramfs/src/main.rs
-// GuardBSD RAM Filesystem Server
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: ramfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Serwer RAMFS GuardBSD.
 
 #![no_std]
 #![no_main]
@@ -45,10 +46,12 @@ fn ramfs_main() -> ! {
         // Wait for VFS requests via IPC
         if port_receive(port, req_buf.as_mut_ptr(), req_buf.len()).is_ok() {
             let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
-            let result = handle_request(op, &req_buf[8..]);
+            let reply_port =
+                u32::from_le_bytes([req_buf[4], req_buf[5], req_buf[6], req_buf[7]]);
+            let result = handle_request(op, &req_buf[8..], reply_port);
 
             resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
-            let _ = port_send(port, resp_buf.as_ptr(), resp_buf.len());
+            let _ = port_send(reply_port as u64, resp_buf.as_ptr(), resp_buf.len());
         }
 
         #[cfg(target_arch = "x86_64")]
@@ -63,13 +66,19 @@ fn ramfs_main() -> ! {
     }
 }
 
-fn handle_request(op: u32, data: &[u8]) -> i64 {
+fn handle_request(op: u32, data: &[u8], reply_port: u32) -> i64 {
     unsafe {
         match op {
             1 => {
                 // Open
                 if data.len() >= 264 {
                     let flags = u32::from_le_bytes([data[256], data[257], data[258], data[259]]);
+                    klog_info!(
+                        "ramfs",
+                        "open request, reply_port={}, flags=0x{:x}",
+                        reply_port,
+                        flags
+                    );
                     ops::open(&mut RAMFS, &data[..256], flags)
                 } else {
                     -22 // EINVAL

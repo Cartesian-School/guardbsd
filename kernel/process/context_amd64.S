@@ -1,10 +1,10 @@
-/*
- * GuardBSD x86_64 Context Switching
- * BSD 3-Clause License
- * Copyright (c) 2025, GuardBSD Project
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_process
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * 64-bit context switch implementation for process/thread switching
- * Follows System V AMD64 ABI calling convention
+ * Przełączanie kontekstu x86_64 (System V AMD64 ABI).
  */
 
 .section .text
@@ -257,4 +257,3 @@ emergency_halt:
     cli
     hlt
     jmp emergency_halt
-

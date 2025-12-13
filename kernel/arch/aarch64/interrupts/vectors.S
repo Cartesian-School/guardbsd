@@ -1,5 +1,11 @@
-// kernel/arch/aarch64/interrupts/vectors.S
-// EL1 exception vectors with IRQ (timer) and SVC handlers.
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_aarch64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Wektory wyjątków EL1 z handlerami IRQ/SVC.
+ */
 
 .section .text
 .align 11

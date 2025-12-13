@@ -1,5 +1,11 @@
-// arch/x86_64/interrupts/timer_isr.S
-// Timer ISR hooking scheduler tick/preemption
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: kernel_arch_x86_64
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * ISR timera podpinający tick/preempcję.
+ */
 
 .intel_syntax noprefix
 .section .text

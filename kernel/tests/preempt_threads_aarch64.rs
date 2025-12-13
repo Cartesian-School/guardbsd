@@ -1,5 +1,9 @@
-// kernel/tests/preempt_threads_aarch64.rs
-// Four EL1 kernel threads to exercise preemption on AArch64.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_tests
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Cztery wątki EL1 do ćwiczenia preempcji na AArch64.
 
 #![cfg(target_arch = "aarch64")]
 #![allow(dead_code)]

@@ -1,6 +1,9 @@
-// Process Job Control Syscalls
-// BSD 3-Clause License
-// Implements: setpgid, getpgid, waitpid, kill (signal sending)
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_syscalls
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wywołania kontroli zadań procesów (setpgid, getpgid, waitpid, kill).
 
 #![no_std]
 

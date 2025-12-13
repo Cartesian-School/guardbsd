@@ -1,5 +1,9 @@
-// kernel/fs/kfile.rs
-// Kernel-internal file API skeleton (no VFS implementation yet)
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_fs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Szkielet wewnętrznego API plików jądra (bez implementacji VFS).
 
 #![allow(dead_code)]
 

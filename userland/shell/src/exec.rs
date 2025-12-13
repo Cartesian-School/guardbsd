@@ -1,8 +1,9 @@
-// userland/shell/src/exec.rs
-// Command execution
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: shell
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wykonywanie poleceń w powłoce gsh.
 
 use crate::builtins::Builtin;
 use crate::io::*;
@@ -68,6 +69,7 @@ fn execute_builtin(
             println(b"  jobs   - List background jobs")?;
             println(b"  klog   - Dump recent kernel log (alias: dmesg)")?;
             println(b"  klogfile - Dump persistent kernel log (/var/log/kern.log)")?;
+            println(b"  klogcheck - Verify persistent log contains test marker")?;
             Ok(())
         }
         Builtin::Echo => {
@@ -89,13 +91,12 @@ fn execute_builtin(
             } else {
                 // Get the directory argument
                 let dir_arg = cmd.args[0].unwrap_or(b"");
-                let dir_str = core::str::from_utf8(dir_arg).unwrap_or("/");
-
                 // Use chdir syscall
                 match gbsd::fs::chdir(dir_arg) {
                     Ok(()) => Ok(()),
                     Err(e) => {
-                        println(&format!("cd: {}", dir_str).as_bytes())?;
+                        print(b"cd: ")?;
+                        print(dir_arg)?;
                         println(b": directory not found")?;
                         Err(e)
                     }
@@ -269,6 +270,9 @@ fn execute_builtin(
         Builtin::KlogFile => {
             builtin_klog_file()
         }
+        Builtin::KlogCheck => {
+            builtin_klog_check()
+        }
     }
 }
 
@@ -314,6 +318,46 @@ fn builtin_klog_file() -> Result<()> {
     }
 
     let _ = gbsd::fs::close(fd);
+    Ok(())
+}
+
+fn builtin_klog_check() -> Result<()> {
+    let fd = match gbsd::fs::open(b"/var/log/kern.log\0", gbsd::fs::O_RDONLY) {
+        Ok(fd) => fd,
+        Err(_) => {
+            println(b"[klogcheck] unable to open /var/log/kern.log")?;
+            return Ok(());
+        }
+    };
+
+    let mut buf = [0u8; 1024];
+    let marker = b"[KLOG-TEST] persistent sink marker";
+    let mut found = false;
+
+    loop {
+        match gbsd::fs::read(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                if buf[..n].windows(marker.len()).any(|w| w == marker) {
+                    found = true;
+                    break;
+                }
+            }
+            Err(_) => {
+                println(b"[klogcheck] read error")?;
+                break;
+            }
+        }
+    }
+
+    let _ = gbsd::fs::close(fd);
+
+    if found {
+        println(b"[klogfile] OK")?;
+    } else {
+        println(b"[klogfile] marker not found")?;
+    }
+
     Ok(())
 }
 

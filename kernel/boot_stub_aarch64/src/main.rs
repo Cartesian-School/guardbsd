@@ -1,3 +1,10 @@
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub_aarch64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny boot stub dla AArch64 (UART init/printf).
+
 #![no_std]
 #![no_main]
 

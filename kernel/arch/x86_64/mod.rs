@@ -1,5 +1,9 @@
-// kernel/arch/x86_64/mod.rs
-// x86_64 architecture glue: long-mode entry stub and early init.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Glue architektury x86_64: wejście long mode i wczesne inicjalizacje.
 
 #![cfg(target_arch = "x86_64")]
 #![allow(dead_code)]

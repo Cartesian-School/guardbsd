@@ -1,4 +1,9 @@
 # .github/workflows/nightly.yml
+# Project: GuardBSD Winter Saga version 1.0.0
+# Package: ci_nightly
+# Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+# License: BSD-3-Clause
+
 name: Nightly Build
 
 on:
@@ -19,13 +24,13 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            target: x86_64-unknown-gbsd.json
+            target: x86_64-cartesian-gbsd.json
             packages: qemu-system-x86 xorriso mtools
-            artifact_file: gbsd-x86_64.iso
+            artifact_path: build/x86_64/guardbsd-saga-x86_64.iso
           - arch: aarch64
-            target: aarch64-unknown-gbsd.json
+            target: aarch64-cartesian-gbsd.json
             packages: qemu-system-aarch64 gcc-aarch64-linux-gnu
-            artifact_file: gbsd-aarch64.bin
+            artifact_path: build/aarch64/guardbsd-aarch64.iso
 
     steps:
       - uses: actions/checkout@v4
@@ -51,8 +56,8 @@ jobs:
       - name: Upload Nightly Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gbsd-nightly-${{ matrix.arch }}-${{ steps.date.outputs.date }}
-          path: build/${{ matrix.artifact_file }}
+          name: guardbsd-nightly-${{ matrix.arch }}-${{ steps.date.outputs.date }}
+          path: ${{ matrix.artifact_path }}
           retention-days: 14 # Store nightly builds for 2 weeks
 
       # Optional: Error notification (requires permissions or webhook)

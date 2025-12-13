@@ -1,8 +1,9 @@
-// servers/guardfs/src/compress.rs
-// GuardFS Compression (LZ4)
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: guardfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Kompresja GuardFS (LZ4-inspirowana, uproszczona).
 
 pub const MAX_COMPRESSED_SIZE: usize = 4096 + 128; // Block + overhead
 

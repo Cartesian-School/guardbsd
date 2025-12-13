@@ -1,8 +1,9 @@
-// kernel/trapframe.rs
-// Canonical trap frame definitions for GuardBSD (x86_64 and AArch64)
-// These mirror the registers saved by interrupt/trap entry prologues and
-// context switch routines. Keep this layout in sync with assembly save/restore
-// code to guarantee offset correctness.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_trapframe
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Kanoniczne ramki pułapek dla x86_64 i AArch64; musi być spójne z kodem asm.
 
 #![no_std]
 

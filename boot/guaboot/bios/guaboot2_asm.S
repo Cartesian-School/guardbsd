@@ -1,7 +1,10 @@
-/*
- * GuaBoot Stage 2 - BIOS Interface and Long Mode Transition
- * BSD 3-Clause License
- * Copyright (c) 2025, GuardBSD Project
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: guaboot_bios
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * GuaBoot stage 2: interfejs BIOS i przejście do long mode.
  */
 
 .code32
@@ -256,4 +259,3 @@ gdt64_end:
 gdt64_ptr:
     .word gdt64_end - gdt64 - 1  /* Limit */
     .quad gdt64                   /* Base */
-

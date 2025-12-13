@@ -1,6 +1,9 @@
-// Logging syscalls
-// BSD 3-Clause License
-// Reads kernel log bytes from the in-memory log backend ring into userspace.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_syscalls
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Wywołania logowania: odczyt bufora logów jądra do przestrzeni użytkownika.
 
 #![no_std]
 

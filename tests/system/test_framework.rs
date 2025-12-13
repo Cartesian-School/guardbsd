@@ -1,8 +1,9 @@
-// tests/system/test_framework.rs
-// Test framework for system tests (shared with integration tests)
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: tests_system
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Framework testów systemowych (współdzielony z integracyjnymi).
 
 extern crate alloc;
 use alloc::string::String;
@@ -196,4 +197,3 @@ static ALLOCATOR: TestAllocator = TestAllocator;
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     test_fail("PANIC occurred during test");
 }
-

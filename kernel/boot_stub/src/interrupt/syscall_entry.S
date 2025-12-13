@@ -1,5 +1,10 @@
-/* Syscall entry via int 0x80
- * Saves GPRs, calls into Rust dispatcher, restores, and iretq.
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: boot_stub
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * Wejście syscalls via int 0x80: zapisuje GPR i wraca iretq.
  */
 
 .section .text

@@ -1,8 +1,9 @@
-// servers/guardzfs/src/dmu.rs
-// GuardZFS Data Management Unit
-// ============================================================================
-// Copyright (c) 2025 Cartesian School - Siergej Sobolewski
-// SPDX-License-Identifier: BSD-3-Clause
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: guardzfs
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Data Management Unit (DMU) GuardZFS.
 
 use crate::blockptr::*;
 

@@ -1,7 +1,10 @@
-/*
- * GuardBSD Loader - BIOS Boot Stage 1
- * BSD 3-Clause License
- * Copyright (c) 2025, Cartesian School - Siergej Sobolewski
+/* 
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: loader_bios
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
+ *
+ * GuardBSD loader BIOS stage 1.
  */
 
 .code16

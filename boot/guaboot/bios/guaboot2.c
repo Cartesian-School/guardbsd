@@ -1,8 +1,10 @@
 /*
- * GuaBoot Stage 2 - BIOS Second Stage Loader
- * BSD 3-Clause License
+ * Project: GuardBSD Winter Saga version 1.0.0
+ * Package: guaboot_bios
+ * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+ * License: BSD-3-Clause
  *
- * Loads the main GuaBoot loader from disk and transfers control
+ * GuaBoot stage 2 BIOS: ładuje główny loader z dysku.
  */
 
 #include <stdint.h>

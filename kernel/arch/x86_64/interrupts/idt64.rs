@@ -1,5 +1,9 @@
-// kernel/arch/x86_64/interrupts/idt64.rs
-// Minimal 64-bit IDT with a timer entry at vector 0x20.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_arch_x86_64
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalna 64-bitowa IDT z wpisem timera na wektorze 0x20.
 
 #![cfg(target_arch = "x86_64")]
 

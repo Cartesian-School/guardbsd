@@ -1,5 +1,9 @@
-// Minimal GuardBSD init (PID 1)
-// Prints its PID via syscalls and exits.
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: init
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Minimalny init (PID 1) — wypisuje PID i wychodzi.
 
 #![no_std]
 #![no_main]

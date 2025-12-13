@@ -1,5 +1,9 @@
-// Virtual Memory Manager - x86_64 Page Tables
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: kernel_mm
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Menedżer pamięci wirtualnej (tablice stron x86_64).
 
 #![no_std]
 

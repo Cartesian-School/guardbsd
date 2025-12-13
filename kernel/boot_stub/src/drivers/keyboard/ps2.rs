@@ -1,5 +1,9 @@
-// PS/2 Keyboard Driver
-// BSD 3-Clause License
+//! Project: GuardBSD Winter Saga version 1.0.0
+//! Package: boot_stub
+//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! License: BSD-3-Clause
+//!
+//! Sterownik klawiatury PS/2 w boot stubie.
 
 const PS2_DATA: u16 = 0x60;
 
