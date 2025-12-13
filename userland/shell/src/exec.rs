@@ -264,15 +264,9 @@ fn execute_builtin(
             // List jobs
             jobs.list_jobs()
         }
-        Builtin::Klog => {
-            builtin_klog()
-        }
-        Builtin::KlogFile => {
-            builtin_klog_file()
-        }
-        Builtin::KlogCheck => {
-            builtin_klog_check()
-        }
+        Builtin::Klog => builtin_klog(),
+        Builtin::KlogFile => builtin_klog_file(),
+        Builtin::KlogCheck => builtin_klog_check(),
     }
 }
 

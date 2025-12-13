@@ -10,11 +10,11 @@
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::fmt::Write;
-use core::sync::atomic::{AtomicBool, Ordering};
-#[cfg(target_pointer_width = "64")]
-use core::sync::atomic::AtomicU64;
 #[cfg(not(target_pointer_width = "64"))]
 use core::sync::atomic::AtomicU32;
+#[cfg(target_pointer_width = "64")]
+use core::sync::atomic::AtomicU64;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 // Recursion protection: per-CPU flag to prevent recursive logging
 static LOGGING_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -199,8 +199,8 @@ pub fn default_early_print(msg: &str) {
 // --------------------------------------------------------------------------
 
 pub mod log_backend {
-    use core::sync::atomic::{AtomicBool, Ordering};
     use super::SpinLock;
+    use core::sync::atomic::{AtomicBool, Ordering};
 
     const MEM_RING_SIZE: usize = 4096;
 

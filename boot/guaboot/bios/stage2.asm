@@ -10,11 +10,22 @@
 .globl _start
 
 .set COM1,             0x3F8
-.set KERNEL_LOAD_SEG,  0x1000
-.set KERNEL_ENTRY,     0x100000  # 1MB (protected mode)
-.set KERNEL_BYTES,     0x3800    # 7 * 2048 (matches dap sectors)
+.set KERNEL_LOAD_SEG,  0x1000        # -> 0x10000 phys
+.set KERNEL_BYTES,     0x8000        # 16 * 2048 (headroom for kernel image)
+.set KERNEL_PTR_ADDR,  0x7000        # where we stash kernel phys for loader
+.set KERNEL_LBA,       57            # updated after ISO build
+.set KERNEL_SECTORS,   16            # read full kernel.elf (ceil(size/2048))
+.set LOADER_SEG,       0x0800        # 0x8000 phys
+.set LOADER_OFFSET,    0x0000
+.set LOADER_LBA,       52            # updated after ISO build
+.set LOADER_SECTORS,   5             # ~8KB loader.bin
+.set LOADER_LINEAR,    (LOADER_SEG << 4)
+.set ENTRY64_SEG,      0x0F00        # 0x0000F000 phys (loader handoff stub, away from loader/BSS)
+.set ENTRY64_OFFSET,   0x0000
+.set ENTRY64_LBA,      49            # updated after ISO build
+.set ENTRY64_SECTORS,  1             # stub is tiny
 .set GDT_SEG,          0x0800
-.set BOOT_DRIVE_PTR,   0x7D49    # shared with stage1 boot_drive
+.set BOOT_DRIVE_PTR,   0x7D49        # shared with stage1 boot_drive
 
 _start:
     mov ax, cs
@@ -23,12 +34,25 @@ _start:
 
     call init_serial
 
+    # Mask PIC until IDT is ready in kernel
+    mov al, 0xFF
+    out 0x21, al
+    out 0xA1, al
+
     lea si, [msg_stage2]
     call print_string
 
     lea si, [msg_load_kernel]
     call print_string
     call load_kernel_sectors
+
+    lea si, [msg_load_loader]
+    call print_string
+    call load_loader
+
+    lea si, [msg_load_entry64]
+    call print_string
+    call load_entry64
 
     # Enable A20 line
     call enable_a20
@@ -42,8 +66,15 @@ _start:
     or al, 1
     mov cr0, eax
 
-    # Far jump to flush pipeline and enter 32-bit mode
-    jmp 0x08:protected_mode
+    # Far return into protected mode using linear target (cs<<4 + offset)
+    xor ebx, ebx
+    mov bx, cs
+    shl ebx, 4
+    lea eax, [protected_mode]
+    add eax, ebx
+    push 0x08
+    push ax
+    lret
 
 # Enable A20 gate using keyboard controller
 enable_a20:
@@ -96,14 +127,79 @@ load_kernel_sectors:
     mov es, ax
     xor bx, bx
 
+    push ds
+    xor ax, ax
+    mov ds, ax
     mov dl, byte ptr [BOOT_DRIVE_PTR]
+    pop ds
     cmp dl, 0
     jne .have_drive
     mov dl, 0xE0
 .have_drive:
 
     mov ah, 0x42        # Extended read
-    lea si, [dap]       # Disk address packet
+    lea si, [dap_kernel]       # Disk address packet
+    int 0x13
+    jc load_error
+
+    # stash physical address for loader at 0x9000
+    mov ax, KERNEL_LOAD_SEG
+    mov bx, 16
+    mul bx               # DX:AX = phys address
+    push ds
+    mov si, ax
+    mov di, dx
+    xor ax, ax
+    mov ds, ax
+    mov word ptr [KERNEL_PTR_ADDR], si
+    mov word ptr [KERNEL_PTR_ADDR+2], di
+    pop ds
+
+    lea si, [msg_ok]
+    call print_string
+    ret
+
+load_loader:
+    mov ax, LOADER_SEG
+    mov es, ax
+    xor bx, bx
+
+    push ds
+    xor ax, ax
+    mov ds, ax
+    mov dl, byte ptr [BOOT_DRIVE_PTR]
+    pop ds
+    cmp dl, 0
+    jne .have_drive2
+    mov dl, 0xE0
+.have_drive2:
+
+    mov ah, 0x42
+    lea si, [dap_loader]
+    int 0x13
+    jc load_error
+
+    lea si, [msg_ok]
+    call print_string
+    ret
+
+load_entry64:
+    mov ax, ENTRY64_SEG
+    mov es, ax
+    xor bx, bx
+
+    push ds
+    xor ax, ax
+    mov ds, ax
+    mov dl, byte ptr [BOOT_DRIVE_PTR]
+    pop ds
+    cmp dl, 0
+    jne .have_drive3
+    mov dl, 0xE0
+.have_drive3:
+
+    mov ah, 0x42
+    lea si, [dap_entry64]
     int 0x13
     jc load_error
 
@@ -120,6 +216,18 @@ load_error:
 setup_gdt:
     lea si, [msg_gdt]
     call print_string
+
+    # Patch GDT base with current linear address (CS<<4 + offset)
+    push eax
+    push ebx
+    xor ebx, ebx
+    mov bx, cs
+    shl ebx, 4
+    lea eax, [gdt_start]
+    add eax, ebx
+    mov dword ptr [gdt_descriptor + 2], eax
+    pop ebx
+    pop eax
 
     lgdt [gdt_descriptor]
     ret
@@ -177,7 +285,7 @@ print_char:
 
 .code32
 protected_mode:
-    # Setup segments
+    # Setup flat segments
     mov ax, 0x10
     mov ds, ax
     mov es, ax
@@ -186,33 +294,46 @@ protected_mode:
     mov ss, ax
     mov esp, 0x90000
 
-    # Copy kernel to 1MB
-    mov esi, 0x00010000         # load address (real mode buffer)
-    mov edi, KERNEL_ENTRY       # destination in protected mode
-    mov ecx, KERNEL_BYTES / 4   # dwords to copy
-    rep movsd
-
-    # Jump to kernel entry point
-    jmp KERNEL_ENTRY
-
+    # Jump to loader (32-bit flat); loader will jump to kernel
+    push 0x08
+    push LOADER_LINEAR
+    lret
 .code16
 
 # Data
 msg_stage2:      .asciz "Stage 2 Loader\r\n"
 msg_load_kernel: .asciz "Loading kernel image..."
+msg_load_loader: .asciz "Loading loader..."
+msg_load_entry64:.asciz "Loading 64-bit stub..."
 msg_a20:         .asciz "A20..."
 msg_gdt:         .asciz "GDT..."
 msg_ok:          .asciz "OK\r\n"
 msg_error:       .asciz "ERROR\r\n"
 
-# Disk Address Packet for INT 13h extended read
-dap:
+# Disk Address Packet for INT 13h extended reads
+dap_kernel:
     .byte 0x10             # Size of packet (16 bytes)
     .byte 0                # Reserved (0)
-    .word 7                # Number of sectors to read (matches KERNEL_BYTES)
+    .word KERNEL_SECTORS   # Number of sectors to read (matches KERNEL_BYTES)
     .word 0                # Offset
     .word KERNEL_LOAD_SEG  # Segment
-    .quad 51               # Starting LBA for /boot/kernel.elf
+    .quad KERNEL_LBA       # Starting LBA for /boot/kernel.elf
+
+dap_loader:
+    .byte 0x10
+    .byte 0
+    .word LOADER_SECTORS
+    .word LOADER_OFFSET
+    .word LOADER_SEG
+    .quad LOADER_LBA
+
+dap_entry64:
+    .byte 0x10
+    .byte 0
+    .word ENTRY64_SECTORS
+    .word ENTRY64_OFFSET
+    .word ENTRY64_SEG
+    .quad ENTRY64_LBA
 
 # GDT (Global Descriptor Table)
 .balign 8

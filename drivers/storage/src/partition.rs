@@ -91,7 +91,7 @@ impl PartitionTable {
         // Parse 4 partition entries
         for i in 0..MAX_PARTITIONS {
             let offset = MBR_PARTITION_TABLE_OFFSET + (i * MBR_PARTITION_ENTRY_SIZE);
-            
+
             let status = mbr[offset];
             let part_type = mbr[offset + 4];
 
@@ -133,15 +133,15 @@ impl PartitionTable {
             }
 
             // Validation: check for address space overflow
-            let end_lba = start_lba.checked_add(sectors)
-                .ok_or(-22)?; // EINVAL - address overflow
+            let end_lba = start_lba.checked_add(sectors).ok_or(-22)?; // EINVAL - address overflow
 
             // Validation: check for overlapping with existing partitions
             for j in 0..self.count {
                 let existing = &self.partitions[j];
-                
+
                 // Calculate existing partition end with overflow check
-                let existing_end = existing.start_lba
+                let existing_end = existing
+                    .start_lba
                     .checked_add(existing.sectors)
                     .ok_or(-22)?; // EINVAL - this shouldn't happen if we validated earlier
 

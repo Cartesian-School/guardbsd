@@ -21,6 +21,8 @@ struct BootInfo {
     UINT32 version;         /* 0x00010000 */
     UINT32 size;            /* sizeof(struct BootInfo) */
     UINT32 kernel_crc32;    /* CRC32 of loaded kernel PT_LOAD segments */
+    UINT64 kernel_base;
+    UINT64 kernel_size;
     UINT64 mem_lower;       /* Memory below 1MB (KB) */
     UINT64 mem_upper;       /* Memory above 1MB (KB) */
     UINT32 boot_device;     /* Boot device ID */
@@ -87,6 +89,8 @@ typedef struct {
 static EFI_HANDLE ImageHandle;
 static EFI_SYSTEM_TABLE *SystemTable;
 static EFI_BOOT_SERVICES *BS;
+static UINT64 kernel_load_base = 0;
+static UINT64 kernel_load_size = 0;
 
 /* ========================================================================
  * Utility Functions
@@ -255,6 +259,8 @@ static UINT32 compute_kernel_crc(void *elf_data) {
 
 static UINT64 load_elf(VOID *elf_data, UINTN elf_size) {
     Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf_data;
+    UINT64 load_base = (UINT64)-1;
+    UINT64 load_end = 0;
     
     if (!verify_elf(ehdr)) {
         Print(L"ERROR: Invalid ELF file\n");
@@ -267,6 +273,14 @@ static UINT64 load_elf(VOID *elf_data, UINTN elf_size) {
     
     for (UINT16 i = 0; i < ehdr->e_phnum; i++) {
         if (phdr[i].p_type != PT_LOAD) continue;
+
+        if (phdr[i].p_paddr < load_base) {
+            load_base = phdr[i].p_paddr;
+        }
+        UINT64 seg_end = phdr[i].p_paddr + phdr[i].p_memsz;
+        if (seg_end > load_end) {
+            load_end = seg_end;
+        }
         
         Print(L"  Segment %u: 0x%lx -> 0x%lx (%lu bytes)\n",
               i, phdr[i].p_paddr, phdr[i].p_paddr + phdr[i].p_memsz,
@@ -286,7 +300,15 @@ static UINT64 load_elf(VOID *elf_data, UINTN elf_size) {
     }
     
     Print(L"Entry point: 0x%lx\n", ehdr->e_entry);
-    
+
+    if (load_base != (UINT64)-1 && load_end > load_base) {
+        kernel_load_base = load_base;
+        kernel_load_size = load_end - load_base;
+    } else {
+        kernel_load_base = 0;
+        kernel_load_size = 0;
+    }
+
     return ehdr->e_entry;
 }
 
@@ -306,6 +328,8 @@ static struct BootInfo *build_bootinfo(EFI_MEMORY_DESCRIPTOR *mmap,
     bi->version = 0x00010000;
     bi->size = sizeof(struct BootInfo);
     bi->kernel_crc32 = kernel_crc32;
+    bi->kernel_base = kernel_load_base;
+    bi->kernel_size = kernel_load_size;
     bi->boot_device = 0;
     bi->cmdline = (CHAR8 *)"console=ttyS0";
     bi->mods_count = 0;

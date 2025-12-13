@@ -10,10 +10,10 @@
 .globl _start
 
 .set COM1,            0x3F8
-.set STAGE2_SEGMENT,  0x0820
+.set STAGE2_SEGMENT,  0x0500
 .set STAGE2_OFFSET,   0x0000
 .set STAGE2_SECTORS,  1
-.set STAGE2_LBA,      50          # xorriso LBA for /boot/guaboot/guaboot2.bin (2048-byte sector)
+.set STAGE2_LBA,      51          # xorriso LBA for /boot/guaboot/guaboot2.bin (2048-byte sector)
 
 _start:
     cli

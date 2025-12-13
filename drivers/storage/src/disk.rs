@@ -133,7 +133,7 @@ impl Disk {
     fn read_from_disk(&mut self, lba: u64, buf: &mut [u8; SECTOR_SIZE]) -> Result<(), i64> {
         // TODO: Replace with actual disk I/O (ATA/AHCI/NVMe)
         // For now, simulate with zeros or mock storage
-        
+
         #[cfg(feature = "mock_storage")]
         {
             if (lba as usize) < self.mock_storage.len() {
@@ -142,20 +142,20 @@ impl Disk {
                 buf.fill(0);
             }
         }
-        
+
         #[cfg(not(feature = "mock_storage"))]
         {
             // Simulate empty disk
             buf.fill(0);
         }
-        
+
         Ok(())
     }
 
     fn write_to_disk(&mut self, lba: u64, buf: &[u8; SECTOR_SIZE]) -> Result<(), i64> {
         // TODO: Replace with actual disk I/O (ATA/AHCI/NVMe)
         // For now, simulate or use mock storage
-        
+
         #[cfg(feature = "mock_storage")]
         {
             // Expand mock storage if needed
@@ -164,13 +164,13 @@ impl Disk {
             }
             self.mock_storage[lba as usize].copy_from_slice(buf);
         }
-        
+
         #[cfg(not(feature = "mock_storage"))]
         {
             // Simulate write (no-op for now)
             let _ = (lba, buf); // Silence unused warnings
         }
-        
+
         Ok(())
     }
 }

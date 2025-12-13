@@ -8,8 +8,8 @@
 #![no_std]
 #![no_main]
 
-use gbsd::*;
 use core::sync::atomic::{AtomicBool, Ordering};
+use gbsd::*;
 
 mod block;
 mod disk;
@@ -45,7 +45,7 @@ fn storage_main() -> ! {
     // Initialize block device
     unsafe {
         BLOCK_DEV = Some(BlockDevice::new(Disk::new(DISK_SECTORS)));
-        
+
         if let Some(ref mut dev) = BLOCK_DEV {
             if let Err(e) = dev.init() {
                 // No valid partition table found
@@ -81,18 +81,10 @@ fn storage_main() -> ! {
                     continue;
                 }
 
-                let op = u32::from_le_bytes([
-                    req_buf[0],
-                    req_buf[1],
-                    req_buf[2],
-                    req_buf[3],
-                ]);
+                let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
 
-                let (result, data_len) = handle_request(
-                    op,
-                    &req_buf[4..received_len],
-                    &mut resp_buf[8..],
-                );
+                let (result, data_len) =
+                    handle_request(op, &req_buf[4..received_len], &mut resp_buf[8..]);
 
                 // Write result code (8 bytes) + data
                 resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
@@ -123,16 +115,11 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> (i64, usize) {
                         return (-22, 0); // EINVAL
                     }
 
-                    let partition = u32::from_le_bytes([
-                        data[0],
-                        data[1],
-                        data[2],
-                        data[3],
-                    ]) as usize;
+                    let partition =
+                        u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
 
                     let lba = u64::from_le_bytes([
-                        data[4], data[5], data[6], data[7],
-                        data[8], data[9], data[10], data[11],
+                        data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11],
                     ]);
 
                     // Validate partition index
@@ -157,16 +144,11 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> (i64, usize) {
                         return (-22, 0); // EINVAL
                     }
 
-                    let partition = u32::from_le_bytes([
-                        data[0],
-                        data[1],
-                        data[2],
-                        data[3],
-                    ]) as usize;
+                    let partition =
+                        u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
 
                     let lba = u64::from_le_bytes([
-                        data[4], data[5], data[6], data[7],
-                        data[8], data[9], data[10], data[11],
+                        data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11],
                     ]);
 
                     // Validate partition index
@@ -214,12 +196,8 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> (i64, usize) {
                         return (-22, 0); // EINVAL
                     }
 
-                    let partition = u32::from_le_bytes([
-                        data[0],
-                        data[1],
-                        data[2],
-                        data[3],
-                    ]) as usize;
+                    let partition =
+                        u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
 
                     if let Some(part) = dev.get_partition(partition) {
                         // Response: [8 bytes start_lba][8 bytes sectors][1 byte type][1 byte active]

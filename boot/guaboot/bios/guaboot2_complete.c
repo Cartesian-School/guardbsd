@@ -30,6 +30,8 @@ struct BootInfo {
     uint32_t version;       /* 0x00010000 */
     uint32_t size;          /* sizeof(struct BootInfo) */
     uint32_t kernel_crc32;  /* CRC32 of loaded kernel image */
+    uint64_t kernel_base;
+    uint64_t kernel_size;
     uint64_t mem_lower;     /* Memory below 1MB (KB) */
     uint64_t mem_upper;     /* Memory above 1MB (KB) */
     uint32_t boot_device;   /* BIOS boot device */
@@ -46,6 +48,9 @@ struct Module {
     char *string;
     uint32_t reserved;
 };
+
+static uint64_t kernel_load_base = 0;
+static uint64_t kernel_load_size = 0;
 
 /* E820 memory map entry */
 struct E820Entry {
@@ -219,6 +224,8 @@ static int verify_elf(Elf64_Ehdr *ehdr) {
 
 static uint64_t load_elf(void *elf_data) {
     Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf_data;
+    uint64_t load_base = UINT64_MAX;
+    uint64_t load_end = 0;
     
     if (!verify_elf(ehdr)) {
         puts("ERROR: Invalid ELF file\n");
@@ -232,6 +239,14 @@ static uint64_t load_elf(void *elf_data) {
     
     for (int i = 0; i < ehdr->e_phnum; i++) {
         if (phdr[i].p_type != PT_LOAD) continue;
+        
+        if (phdr[i].p_paddr < load_base) {
+            load_base = phdr[i].p_paddr;
+        }
+        uint64_t seg_end = phdr[i].p_paddr + phdr[i].p_memsz;
+        if (seg_end > load_end) {
+            load_end = seg_end;
+        }
         
         puts("  Segment ");
         put_hex(i);
@@ -255,6 +270,14 @@ static uint64_t load_elf(void *elf_data) {
     puts("Entry point: ");
     put_hex(ehdr->e_entry);
     puts("\n");
+    
+    if (load_base != UINT64_MAX && load_end > load_base) {
+        kernel_load_base = load_base;
+        kernel_load_size = load_end - load_base;
+    } else {
+        kernel_load_base = 0;
+        kernel_load_size = 0;
+    }
     
     return ehdr->e_entry;
 }
@@ -346,6 +369,8 @@ void guaboot2_main(void) {
 
     /* Compute kernel CRC over loaded segments */
     bi->kernel_crc32 = compute_kernel_crc(kernel_buffer);
+    bi->kernel_base = kernel_load_base;
+    bi->kernel_size = kernel_load_size;
     puts("Kernel CRC32: 0x");
     put_hex(bi->kernel_crc32);
     puts("\n");

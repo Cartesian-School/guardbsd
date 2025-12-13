@@ -8,8 +8,8 @@
 #![no_std]
 #![no_main]
 
-use gbsd::*;
 use core::sync::atomic::{AtomicBool, Ordering};
+use gbsd::*;
 
 mod console;
 mod uart;
@@ -81,18 +81,10 @@ fn serial_main() -> ! {
                     continue;
                 }
 
-                let op = u32::from_le_bytes([
-                    req_buf[0],
-                    req_buf[1],
-                    req_buf[2],
-                    req_buf[3],
-                ]);
+                let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
 
-                let (result, data_len) = handle_request(
-                    op,
-                    &req_buf[4..received_len],
-                    &mut resp_buf[8..],
-                );
+                let (result, data_len) =
+                    handle_request(op, &req_buf[4..received_len], &mut resp_buf[8..]);
 
                 // Write result code (8 bytes) + data
                 resp_buf[0..8].copy_from_slice(&result.to_le_bytes());
@@ -123,12 +115,7 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> (i64, usize) {
                         return (-22, 0); // EINVAL
                     }
 
-                    let len = u32::from_le_bytes([
-                        data[0],
-                        data[1],
-                        data[2],
-                        data[3],
-                    ]) as usize;
+                    let len = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
 
                     // Validate length
                     if len > data.len() - 4 || len > MAX_REQUEST_SIZE - 4 {
@@ -146,12 +133,7 @@ fn handle_request(op: u32, data: &[u8], resp_data: &mut [u8]) -> (i64, usize) {
                         return (-22, 0); // EINVAL
                     }
 
-                    let max_len = u32::from_le_bytes([
-                        data[0],
-                        data[1],
-                        data[2],
-                        data[3],
-                    ]) as usize;
+                    let max_len = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
 
                     // Validate and limit read length
                     let read_len = max_len.min(resp_data.len()).min(MAX_RESPONSE_SIZE - 8);

@@ -20,8 +20,8 @@ mod spawn;
 
 use crate::completion::Completer;
 use crate::env::*;
-use crate::jobs::JobControl;
 use crate::io::print;
+use crate::jobs::JobControl;
 use gbsd::*;
 
 const MAX_LINE: usize = 256;

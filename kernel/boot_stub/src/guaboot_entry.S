@@ -142,7 +142,8 @@ gdt64:
     .quad 0x00AFFA000000FFFF                  /* User code */
     .quad 0x00AFF2000000FFFF                  /* User data */
     /* TSS descriptor (16 bytes) */
-    .word (tss64_end - tss64 - 1)
+gdt64_tss_descriptor:
+    .word 0x0067                               /* TSS limit */
 gdt64_tss_base0:
     .word 0
 gdt64_tss_base1:

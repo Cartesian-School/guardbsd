@@ -6,14 +6,14 @@
 //! Abstrakcja sprzętowa UART (16550).
 
 // 16550 UART register offsets
-const REG_DATA: u16 = 0;        // Data register (DLAB=0)
-const REG_IER: u16 = 1;         // Interrupt Enable Register (DLAB=0)
-const REG_FCR: u16 = 2;         // FIFO Control Register
-const REG_LCR: u16 = 3;         // Line Control Register
-const REG_MCR: u16 = 4;         // Modem Control Register
-const REG_LSR: u16 = 5;         // Line Status Register
-const REG_DLL: u16 = 0;         // Divisor Latch Low (DLAB=1)
-const REG_DLH: u16 = 1;         // Divisor Latch High (DLAB=1)
+const REG_DATA: u16 = 0; // Data register (DLAB=0)
+const REG_IER: u16 = 1; // Interrupt Enable Register (DLAB=0)
+const REG_FCR: u16 = 2; // FIFO Control Register
+const REG_LCR: u16 = 3; // Line Control Register
+const REG_MCR: u16 = 4; // Modem Control Register
+const REG_LSR: u16 = 5; // Line Status Register
+const REG_DLL: u16 = 0; // Divisor Latch Low (DLAB=1)
+const REG_DLH: u16 = 1; // Divisor Latch High (DLAB=1)
 
 // Line Status Register bits
 const LSR_DATA_READY: u8 = 0x01;
@@ -26,7 +26,7 @@ const LSR_TRANSMITTER_EMPTY: u8 = 0x40;
 
 // Line Control Register bits
 const LCR_DLAB: u8 = 0x80;
-const LCR_8N1: u8 = 0x03;  // 8 bits, no parity, 1 stop bit
+const LCR_8N1: u8 = 0x03; // 8 bits, no parity, 1 stop bit
 
 // FIFO Control Register bits
 const FCR_ENABLE_FIFO: u8 = 0x01;

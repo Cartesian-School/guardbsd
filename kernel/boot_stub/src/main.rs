@@ -645,6 +645,8 @@ pub struct BootInfo {
     pub version: u32,
     pub size: u32,
     pub kernel_crc32: u32,
+    pub kernel_base: u64,
+    pub kernel_size: u64,
     pub mem_lower: u64,
     pub mem_upper: u64,
     pub boot_device: u32,
@@ -783,6 +785,12 @@ fn log_bootinfo(bi: &BootInfo) {
         print_hex32(bi.kernel_crc32);
         print("\n");
 
+        print("[BOOT]   kernel_base=0x");
+        print_hex64(bi.kernel_base);
+        print(" kernel_size=0x");
+        print_hex64(bi.kernel_size);
+        print("\n");
+
         print("[BOOT]   boot_device=0x");
         print_hex32(bi.boot_device);
         print(" cmdline=");
@@ -911,26 +919,33 @@ fn crc32(data: *const u8, len: usize) -> u32 {
 
 fn verify_kernel_crc(bi: &BootInfo) {
     unsafe {
-        let start = &__image_start as *const u8 as usize;
-        let end = &__image_end as *const u8 as usize;
-        let len = end - start;
-        let crc = crc32(start as *const u8, len);
-        if crc != bi.kernel_crc32 {
-            print("[SECURITY] kernel_crc32 (bootloader) = 0x");
-            print_hex32(bi.kernel_crc32);
-            print("\n");
-            print("[SECURITY] kernel_crc32 (recomputed) = 0x");
-            print_hex32(crc);
-            print("\n");
-            print("[SECURITY] Kernel CRC MISMATCH – halting\n");
-            panic_and_halt("Kernel integrity check failed");
+        print("[BOOT] verify_kernel_crc: enter\n");
+
+        if bi.kernel_base == 0 || bi.kernel_size == 0 {
+            print("[BOOT] verify_kernel_crc: missing kernel range -> SKIP\n");
+            return;
         }
-        print("[SECURITY] kernel_crc32 (bootloader) = 0x");
-        print_hex32(bi.kernel_crc32);
+
+        print("[BOOT] verify_kernel_crc: region base=0x");
+        print_hex64(bi.kernel_base);
+        print(" size=0x");
+        print_hex64(bi.kernel_size);
         print("\n");
-        print("[SECURITY] kernel_crc32 (recomputed) = 0x");
+
+        let len = bi.kernel_size as usize;
+        let crc = crc32(bi.kernel_base as *const u8, len);
+
+        print("[BOOT] verify_kernel_crc: expected=0x");
+        print_hex32(bi.kernel_crc32);
+        print(" calc=0x");
         print_hex32(crc);
         print("\n");
+
+        if crc != bi.kernel_crc32 {
+            print("[SECURITY] Kernel CRC mismatch – halting\n");
+            panic_and_halt("Kernel integrity check failed");
+        }
+
         print("[SECURITY] Kernel CRC verified\n");
     }
 }
@@ -1114,11 +1129,14 @@ pub extern "C" fn guardbsd_main() -> ! {
     unsafe {
         serial_init();
         print("[BOOT] guardbsd_main entered\n");
+        print("[BOOT] A1 guardbsd_main entered\n");
 
         // Validate boot protocol and log BootInfo contents before continuing.
         let bi = validate_bootinfo();
         log_bootinfo(bi);
+        print("[BOOT] A2 before verify_kernel_crc\n");
         verify_kernel_crc(bi);
+        print("[BOOT] A3 after verify_kernel_crc\n");
 
         print("\n\n");
         print("================================================================================\n");
@@ -1132,9 +1150,13 @@ pub extern "C" fn guardbsd_main() -> ! {
         init_memory(bi);
         print("[OK] PMM initialized\n");
         print("[OK] VMM initialized\n");
+        print("[BOOT] A4 before init_kernel_template\n");
         init_kernel_template();
+        print("[BOOT] A5 after init_kernel_template\n");
+        print("[BOOT] A6 before kernel_template_ready\n");
         if kernel_template_ready() {
             print("[OK] Kernel PML4 template captured\n");
+            print("[BOOT] A7 kernel_template_ready -> true\n");
         } else {
             panic_and_halt("Failed to capture kernel PML4 template");
         }

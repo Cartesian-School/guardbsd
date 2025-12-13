@@ -5,8 +5,8 @@
 //!
 //! Pomost do logowania jądra przez wywołania systemowe.
 
-pub use kernel_log::{LogLevel, UserLogRecord, LOG_MSG_MAX, LOG_RING_SIZE, LOG_SUBSYS_MAX};
 use crate::syscall;
+pub use kernel_log::{LogLevel, UserLogRecord, LOG_MSG_MAX, LOG_RING_SIZE, LOG_SUBSYS_MAX};
 
 /// Read raw kernel log bytes into the provided buffer.
 /// Returns number of bytes copied or negative errno.

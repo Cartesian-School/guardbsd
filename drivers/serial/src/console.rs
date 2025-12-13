@@ -72,15 +72,15 @@ impl Console {
     /// Limited to ISR_MAX_ITERATIONS to prevent long ISR execution.
     pub fn handle_interrupt(&mut self) {
         let mut iterations = 0;
-        
+
         while let Some(byte) = self.uart.read_byte() {
             iterations += 1;
             if iterations >= ISR_MAX_ITERATIONS {
                 break; // Prevent ISR from running too long
             }
-            
+
             let next_head = (self.rx_head + 1) % RX_BUFFER_SIZE;
-            
+
             if next_head != self.rx_tail {
                 // Buffer has space
                 self.rx_buf[self.rx_head] = byte;

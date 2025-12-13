@@ -46,8 +46,7 @@ fn ramfs_main() -> ! {
         // Wait for VFS requests via IPC
         if port_receive(port, req_buf.as_mut_ptr(), req_buf.len()).is_ok() {
             let op = u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
-            let reply_port =
-                u32::from_le_bytes([req_buf[4], req_buf[5], req_buf[6], req_buf[7]]);
+            let reply_port = u32::from_le_bytes([req_buf[4], req_buf[5], req_buf[6], req_buf[7]]);
             let result = handle_request(op, &req_buf[8..], reply_port);
 
             resp_buf[0..8].copy_from_slice(&result.to_le_bytes());

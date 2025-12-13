@@ -136,7 +136,12 @@ pub fn process_vfs_request(
         match mount.mount_type {
             crate::MountType::RamFs => {
                 // Forward to RAMFS server via IPC
-                klog_info!("vfs", "forward to ramfs path='{}' op={:?}", path, req.op as u32);
+                klog_info!(
+                    "vfs",
+                    "forward to ramfs path='{}' op={:?}",
+                    path,
+                    req.op as u32
+                );
                 return forward_to_ramfs(req, mount.port, vfs_port);
             }
             crate::MountType::DevFs => {

@@ -46,9 +46,7 @@ impl BlockDevice {
         }
 
         // Calculate absolute LBA with overflow check
-        let absolute_lba = part.start_lba
-            .checked_add(lba)
-            .ok_or(-22)?; // EINVAL - address overflow
+        let absolute_lba = part.start_lba.checked_add(lba).ok_or(-22)?; // EINVAL - address overflow
 
         // Validate absolute LBA is within disk bounds
         if absolute_lba >= self.disk.sector_count() {
@@ -71,9 +69,7 @@ impl BlockDevice {
         }
 
         // Calculate absolute LBA with overflow check
-        let absolute_lba = part.start_lba
-            .checked_add(lba)
-            .ok_or(-22)?; // EINVAL - address overflow
+        let absolute_lba = part.start_lba.checked_add(lba).ok_or(-22)?; // EINVAL - address overflow
 
         // Validate absolute LBA is within disk bounds
         if absolute_lba >= self.disk.sector_count() {
