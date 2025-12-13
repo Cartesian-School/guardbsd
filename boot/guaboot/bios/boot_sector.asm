@@ -1,11 +1,10 @@
 .intel_syntax noprefix
-.intel_syntax noprefix
-; Project: GuardBSD Winter Saga version 1.0.0
-; Package: guaboot_bios
-; Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
-; License: BSD-3-Clause
-;
-; Boot sector start for GuaBoot BIOS.
+# Project: GuardBSD Winter Saga version 1.0.0
+# Package: guaboot_bios
+# Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+# License: BSD-3-Clause
+#
+# Boot sector start for GuaBoot BIOS.
 .code16
 .section .text
 .globl _start
@@ -14,9 +13,7 @@
 .set STAGE2_SEGMENT,  0x0820
 .set STAGE2_OFFSET,   0x0000
 .set STAGE2_SECTORS,  1
-.set STAGE2_LBA,      35          # isoinfo LBA for guaboot2.bin
-.set SCRATCH_SEG,     0x9000
-.set SCRATCH_OFF,     0x0000
+.set STAGE2_LBA,      50          # xorriso LBA for /boot/guaboot/guaboot2.bin (2048-byte sector)
 
 _start:
     cli
@@ -27,12 +24,12 @@ _start:
     mov sp, 0x7C00
     sti
 
+    mov [boot_drive], dl          # original DL (e.g., 0xFC)
+
     call init_serial
 
-    mov si, msg_boot
+    lea si, [msg_boot]
     call print_string
-
-    mov [boot_drive], dl          # original DL (e.g., 0xFC)
 
     # Print original DL
     mov al, 'o'
@@ -47,101 +44,36 @@ _start:
     call print_hex8
     call newline
 
-    # TEMP: force CHS path immediately to validate CHS read works
-    jmp chs_fallback
-
-chs_fallback:
-    mov si, msg_chs
-    call print_string
-
-    # CHS read on original DL
+    # Try LBA read with BIOS-provided drive, then common CD drive numbers
     mov dl, [boot_drive]
-    mov ah, 0x08
-    int 0x13
-    jc disk_error
+    call try_lba
+    jnc stage2_jump
 
-    mov bl, cl
-    and bl, 0x3F            # sectors per track
-    mov [spt], bl
-    mov bl, dh
-    inc bl                   # heads count = DH + 1
-    mov [heads], bl
-    cmp byte ptr [spt], 0
-    jne .spt_ok
-    mov byte ptr [spt], 32   # fallback geometry
-.spt_ok:
-    cmp byte ptr [heads], 0
-    jne .heads_ok
-    mov byte ptr [heads], 64
-.heads_ok:
+    mov dl, 0x00
+    call try_lba
+    jnc stage2_jump
 
-    # Convert LBA -> CHS (LBA fits in AX)
-    mov ax, STAGE2_LBA
-    xor dx, dx
-    mov bl, [spt]
-    div bl                   # AL=quotient (cyl*heads + head), AH=remainder (sector-1)
-    mov cl, ah
-    inc cl                   # sector = rem + 1
-    mov ah, 0
-    # AX now = quotient
-    mov bl, [heads]
-    xor dx, dx
-    div bl                   # AL=cylinder, AH=head
-    mov dh, ah               # DH=head
-    mov ch, al               # CH=cylinder low
-    xor ah, ah               # cylinder high bits zero for small LBA
-    # CL already has sector
+    mov dl, 0x80
+    call try_lba
+    jnc stage2_jump
 
-    # Read via AH=02h into scratch
-    mov ax, SCRATCH_SEG
-    mov es, ax
-    mov bx, SCRATCH_OFF
-    mov ah, 0x02
-    mov al, STAGE2_SECTORS
-    int 0x13
-    jc disk_error
-    cmp al, STAGE2_SECTORS
-    jne disk_error
+    mov dl, 0x9F
+    call try_lba
+    jnc stage2_jump
 
-    mov si, msg_chs
-    call print_string
+    mov dl, 0xE0
+    call try_lba
+    jnc stage2_jump
 
-    # Print first 4 bytes from scratch (expect 8B36BF82)
-    mov si, msg_data
-    call print_string
-    mov bx, SCRATCH_OFF
-    mov al, es:[bx]
-    call print_hex8
-    inc bx
-    mov al, es:[bx]
-    call print_hex8
-    inc bx
-    mov al, es:[bx]
-    call print_hex8
-    inc bx
-    mov al, es:[bx]
-    call print_hex8
-    call newline
-
-    # Copy scratch to stage2 destination
-    push ds
-    mov ax, SCRATCH_SEG
-    mov ds, ax
-    xor si, si
-    mov ax, STAGE2_SEGMENT
-    mov es, ax
-    mov di, STAGE2_OFFSET
-    mov cx, 256 * STAGE2_SECTORS   # words per sector
-    rep movsw
-    pop ds
+    jmp disk_error
 
 stage2_jump:
-    mov si, msg_jump
+    lea si, [msg_jump]
     call print_string
     jmp STAGE2_SEGMENT:STAGE2_OFFSET
 
 disk_error:
-    mov si, msg_err
+    lea si, [msg_err]
     call print_string
     mov al, 'E'
     call print_char
@@ -151,11 +83,39 @@ disk_error:
     jmp hang
 
 hang:
-    mov si, msg_halt
+    lea si, [msg_halt]
     call print_string
     cli
     hlt
     jmp hang
+
+try_lba:
+    lea si, [msg_lba]
+    call print_string
+    mov al, dl
+    call print_hex8
+    mov al, ':'
+    call print_char
+
+    lea si, [dap]
+    mov ah, 0x42                 # extended disk read (no-emulation CD)
+    int 0x13
+    mov bl, ah
+    jc .fail
+
+    lea si, [msg_ok]
+    call print_string
+    clc
+    ret
+
+.fail:
+    mov al, '!'
+    call print_char
+    mov al, bl
+    call print_hex8
+    call newline
+    stc
+    ret
 
 init_serial:
     mov dx, COM1 + 1
@@ -238,14 +198,12 @@ newline:
 
 # Data
 msg_boot:   .asciz "GB1\n"
-msg_data:   .asciz "D "
-msg_chs:    .asciz "C\n"
+msg_lba:    .asciz "L\n"
 msg_jump:   .asciz "J\n"
 msg_err:    .asciz "X "
 msg_halt:   .asciz "H\n"
+msg_ok:     .asciz "OK\n"
 boot_drive: .byte 0
-spt:        .byte 0
-heads:      .byte 0
 
 # Disk Address Packet for INT 13h extended read (stage2)
 dap:

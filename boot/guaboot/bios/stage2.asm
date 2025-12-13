@@ -1,23 +1,32 @@
-; Project: GuardBSD Winter Saga version 1.0.0
-; Package: guaboot_bios
-; Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
-; License: BSD-3-Clause
-;
-; GuaBoot stage2 loader (BIOS, 16-bit).
+# Project: GuardBSD Winter Saga version 1.0.0
+# Package: guaboot_bios
+# Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+# License: BSD-3-Clause
+#
+# GuaBoot stage2 loader (BIOS, 16-bit).
 .intel_syntax noprefix
 .code16
 .section .text
 .globl _start
 
+.set COM1,             0x3F8
 .set KERNEL_LOAD_SEG,  0x1000
 .set KERNEL_ENTRY,     0x100000  # 1MB (protected mode)
+.set KERNEL_BYTES,     0x3800    # 7 * 2048 (matches dap sectors)
 .set GDT_SEG,          0x0800
+.set BOOT_DRIVE_PTR,   0x7D49    # shared with stage1 boot_drive
 
 _start:
-    mov si, msg_stage2
+    mov ax, cs
+    mov ds, ax
+    mov es, ax
+
+    call init_serial
+
+    lea si, [msg_stage2]
     call print_string
 
-    mov si, msg_load_kernel
+    lea si, [msg_load_kernel]
     call print_string
     call load_kernel_sectors
 
@@ -87,24 +96,29 @@ load_kernel_sectors:
     mov es, ax
     xor bx, bx
 
+    mov dl, byte ptr [BOOT_DRIVE_PTR]
+    cmp dl, 0
+    jne .have_drive
+    mov dl, 0xE0
+.have_drive:
+
     mov ah, 0x42        # Extended read
-    mov dl, 0x80        # Drive
-    mov si, dap         # Disk address packet
+    lea si, [dap]       # Disk address packet
     int 0x13
     jc load_error
 
-    mov si, msg_ok
+    lea si, [msg_ok]
     call print_string
     ret
 
 load_error:
-    mov si, msg_error
+    lea si, [msg_error]
     call print_string
     jmp $
 
 # Setup GDT
 setup_gdt:
-    mov si, msg_gdt
+    lea si, [msg_gdt]
     call print_string
 
     lgdt [gdt_descriptor]
@@ -117,11 +131,48 @@ print_string:
     lodsb
     or al, al
     jz .done
-    mov ah, 0x0E
-    int 0x10
+    call print_char
     jmp .loop
 .done:
     popa
+    ret
+
+init_serial:
+    mov dx, COM1 + 1
+    mov al, 0x00         # Disable interrupts
+    out dx, al
+    mov dx, COM1 + 3
+    mov al, 0x80         # Enable DLAB
+    out dx, al
+    mov dx, COM1 + 0
+    mov al, 0x03         # Divisor low (38400 baud)
+    out dx, al
+    mov dx, COM1 + 1
+    mov al, 0x00         # Divisor high
+    out dx, al
+    mov dx, COM1 + 3
+    mov al, 0x03         # 8N1, disable DLAB
+    out dx, al
+    mov dx, COM1 + 2
+    mov al, 0xC7         # Enable FIFO
+    out dx, al
+    mov dx, COM1 + 4
+    mov al, 0x0B         # IRQs enabled, RTS/DSR set
+    out dx, al
+    ret
+
+print_char:
+    push dx
+    push ax
+.tx_wait:
+    mov dx, COM1 + 5
+    in al, dx
+    test al, 0x20
+    jz .tx_wait
+    mov dx, COM1
+    pop ax
+    out dx, al
+    pop dx
     ret
 
 .code32
@@ -134,6 +185,12 @@ protected_mode:
     mov gs, ax
     mov ss, ax
     mov esp, 0x90000
+
+    # Copy kernel to 1MB
+    mov esi, 0x00010000         # load address (real mode buffer)
+    mov edi, KERNEL_ENTRY       # destination in protected mode
+    mov ecx, KERNEL_BYTES / 4   # dwords to copy
+    rep movsd
 
     # Jump to kernel entry point
     jmp KERNEL_ENTRY
@@ -152,10 +209,10 @@ msg_error:       .asciz "ERROR\r\n"
 dap:
     .byte 0x10             # Size of packet (16 bytes)
     .byte 0                # Reserved (0)
-    .word 128              # Number of sectors to read (64KB)
+    .word 7                # Number of sectors to read (matches KERNEL_BYTES)
     .word 0                # Offset
     .word KERNEL_LOAD_SEG  # Segment
-    .quad 16               # Starting LBA (sector 16)
+    .quad 51               # Starting LBA for /boot/kernel.elf
 
 # GDT (Global Descriptor Table)
 .balign 8

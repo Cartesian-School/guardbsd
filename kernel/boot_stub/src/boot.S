@@ -4,19 +4,13 @@
  * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
  * License: BSD-3-Clause
  *
- * Punkt wejścia z nagłówkiem Multiboot; GRUB musi znaleźć go w pierwszych 8KB.
+ * Minimalny punkt wejścia dla GuaBoot (bez Multiboot).
  */
 
 .code32                                     /* Force 32-bit code */
 .section .boot, "ax"
 .align 4
 .global _boot_entry
-
-/* Multiboot header - MUST be in first 8KB */
-multiboot_header:
-    .long 0x1BADB002                        /* Magic number */
-    .long 0x00000003                        /* Flags: align modules, want memory map */
-    .long -(0x1BADB002 + 0x00000003)       /* Checksum */
 
 _boot_entry:
     cli                                     /* Disable interrupts */
@@ -25,9 +19,11 @@ _boot_entry:
     mov $stack_top, %esp
     mov %esp, %ebp
     
-    /* Save multiboot info */
-    push %ebx                               /* Multiboot info pointer */
-    push %eax                               /* Multiboot magic */
+    /* We are entered directly by GuaBoot (no multiboot payload) */
+    xor %eax, %eax
+    xor %ebx, %ebx
+    xor %ecx, %ecx
+    xor %edx, %edx
     
     /* Jump to Rust entry point */
     call _start

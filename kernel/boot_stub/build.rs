@@ -9,6 +9,7 @@ fn main() {
     // Build GuaBoot entry point (FreeBSD-style, NO multiboot)
     cc::Build::new()
         .file("src/guaboot_entry.S")
+        .flag("-m64")
         .compile("guaboot_entry");
     println!("cargo:rerun-if-changed=src/guaboot_entry.S");
 
@@ -26,11 +27,13 @@ fn main() {
 
     cc::Build::new()
         .file("../interrupt/keyboard_irq.S")
+        .flag("-m64")
         .compile("keyboard_irq");
     println!("cargo:rerun-if-changed=../interrupt/keyboard_irq.S");
 
     cc::Build::new()
         .file("../interrupt/timer_irq.S")
+        .flag("-m64")
         .compile("timer_irq");
     println!("cargo:rerun-if-changed=../interrupt/timer_irq.S");
 

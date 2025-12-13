@@ -1,9 +1,9 @@
-//! Project: GuardBSD Winter Saga version 1.0.0
-//! Package: shared
-//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
-//! License: BSD-3-Clause
-//!
-//! Kanoniczne numery wywołań systemowych GuardBSD (źródło prawdy dla kernela i userlandu).
+// Project: GuardBSD Winter Saga version 1.0.0
+// Package: shared
+// Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+// License: BSD-3-Clause
+//
+// Kanoniczne numery wywołań systemowych GuardBSD (źródło prawdy dla kernela i userlandu).
 
 
 // Process Management Syscalls
