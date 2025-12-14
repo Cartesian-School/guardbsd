@@ -60,6 +60,16 @@ pub struct CpuContext {
     pub cr3: u32,
 }
 
+#[cfg(target_pointer_width = "64")]
+#[inline(always)]
+unsafe fn load_cr3(value: u64) {
+    core::arch::asm!("mov cr3, {}", in(reg) value, options(nostack, preserves_flags));
+}
+
+#[cfg(not(target_pointer_width = "64"))]
+#[inline(always)]
+unsafe fn load_cr3(_value: u64) {}
+
 pub mod process {
     pub fn switch_to(_pid: usize) {}
     pub fn get_current() -> Option<usize> {
@@ -94,9 +104,17 @@ pub mod elf_loader {
 impl CpuContext {
     pub const fn new() -> Self {
         CpuContext {
-            edi: 0, esi: 0, ebp: 0, esp: 0,
-            ebx: 0, edx: 0, ecx: 0, eax: 0,
-            eip: 0, eflags: 0, cr3: 0,
+            edi: 0,
+            esi: 0,
+            ebp: 0,
+            esp: 0,
+            ebx: 0,
+            edx: 0,
+            ecx: 0,
+            eax: 0,
+            eip: 0,
+            eflags: 0,
+            cr3: 0,
         }
     }
 }
@@ -194,8 +212,11 @@ pub struct ElfLoader;
 impl ElfLoader {
     pub fn validate_header(ehdr: &Elf32_Ehdr) -> bool {
         // Check ELF magic
-        if ehdr.e_ident[0] != 0x7F || ehdr.e_ident[1] != b'E' ||
-           ehdr.e_ident[2] != b'L' || ehdr.e_ident[3] != b'F' {
+        if ehdr.e_ident[0] != 0x7F
+            || ehdr.e_ident[1] != b'E'
+            || ehdr.e_ident[2] != b'L'
+            || ehdr.e_ident[3] != b'F'
+        {
             return false;
         }
 
@@ -207,10 +228,7 @@ impl ElfLoader {
         true
     }
 
-    pub fn load_program_headers<'a>(
-        ehdr: &Elf32_Ehdr,
-        file_data: &'a [u8],
-    ) -> Option<u32> {
+    pub fn load_program_headers<'a>(ehdr: &Elf32_Ehdr, file_data: &'a [u8]) -> Option<u32> {
         let phdr_start = ehdr.e_phoff as usize;
         let phdr_size = ehdr.e_phentsize as usize;
         let phdr_count = ehdr.e_phnum as usize;
@@ -222,9 +240,7 @@ impl ElfLoader {
             }
 
             // Safety: We've checked bounds
-            let phdr = unsafe {
-                &*(file_data.as_ptr().add(phdr_offset) as *const Elf32_Phdr)
-            };
+            let phdr = unsafe { &*(file_data.as_ptr().add(phdr_offset) as *const Elf32_Phdr) };
 
             if phdr.p_type == PT_LOAD {
                 if !Self::load_segment(phdr, file_data) {
@@ -282,11 +298,15 @@ fn allocate_kernel_stack() -> u32 {
 
 fn get_current_page_table() -> u32 {
     // Get CR3 register value
-    let cr3: u32;
+    let cr3: u64;
     unsafe {
-        core::arch::asm!("mov {}, cr3", out(reg) cr3);
+        core::arch::asm!(
+            "mov {0:r}, cr3",
+            out(reg) cr3,
+            options(nostack, preserves_flags),
+        );
     }
-    cr3
+    cr3 as u32
 }
 
 // Global process manager
@@ -307,9 +327,7 @@ pub fn load_microkernel(_name: &str, path: &str) -> Option<usize> {
         }
 
         // Safety: We've checked the size
-        let ehdr = unsafe {
-            &*(file_data.as_ptr() as *const Elf32_Ehdr)
-        };
+        let ehdr = unsafe { &*(file_data.as_ptr() as *const Elf32_Ehdr) };
 
         // Validate ELF header
         if !ElfLoader::validate_header(ehdr) {
@@ -319,9 +337,7 @@ pub fn load_microkernel(_name: &str, path: &str) -> Option<usize> {
         // Load program segments
         if let Some(entry_point) = ElfLoader::load_program_headers(ehdr, file_data) {
             // Create process with loaded entry point
-            unsafe {
-                PROCESS_MANAGER.create_process(entry_point, 0x7FFFFFFF)
-            }
+            unsafe { PROCESS_MANAGER.create_process(entry_point, 0x7FFFFFFF) }
         } else {
             None
         }
@@ -358,9 +374,7 @@ pub fn load_server(_name: &str, path: &str) -> Option<usize> {
         }
 
         // Safety: We've checked the size
-        let ehdr = unsafe {
-            &*(file_data.as_ptr() as *const Elf32_Ehdr)
-        };
+        let ehdr = unsafe { &*(file_data.as_ptr() as *const Elf32_Ehdr) };
 
         // Validate ELF header
         if !ElfLoader::validate_header(ehdr) {
@@ -370,9 +384,7 @@ pub fn load_server(_name: &str, path: &str) -> Option<usize> {
         // Load program segments
         if let Some(entry_point) = ElfLoader::load_program_headers(ehdr, file_data) {
             // Create process with loaded entry point
-            unsafe {
-                PROCESS_MANAGER.create_process(entry_point, 0x7FFFFFFF)
-            }
+            unsafe { PROCESS_MANAGER.create_process(entry_point, 0x7FFFFFFF) }
         } else {
             None
         }
@@ -425,22 +437,22 @@ fn enter_long_mode_for_microkernel(_context: &CpuContext) {
 pub fn switch_to_process(context: &CpuContext) {
     unsafe {
         // Load new page table
-        core::arch::asm!("mov cr3, {}", in(reg) context.cr3);
+        load_cr3(context.cr3 as u64);
 
         // Restore registers and jump to process
         // This is a simplified context switch - in reality we'd save current context first
         core::arch::asm!(
-            "mov esp, {esp}",
-            "push {eflags}",
+            "mov esp, {esp:e}",
+            "push {eflags:e}",
             "push {cs}",
-            "push {eip}",
-            "mov edi, {edi}",
-            "mov esi, {esi}",
-            "mov ebp, {ebp}",
-            "mov ebx, {ebx}",
-            "mov edx, {edx}",
-            "mov ecx, {ecx}",
-            "mov eax, {eax}",
+            "push {eip:e}",
+            "mov edi, {edi:e}",
+            "mov esi, {esi:e}",
+            "mov ebp, {ebp:e}",
+            "mov ebx, {ebx:e}",
+            "mov edx, {edx:e}",
+            "mov ecx, {ecx:e}",
+            "mov eax, {eax:e}",
             "iret",
             esp = in(reg) context.esp,
             eflags = in(reg) context.eflags,

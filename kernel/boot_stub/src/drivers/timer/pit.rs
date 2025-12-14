@@ -11,7 +11,7 @@ const PIT_FREQUENCY: u32 = 1193182;
 
 pub fn init(hz: u32) {
     let divisor = (PIT_FREQUENCY / hz) as u16;
-    
+
     unsafe {
         outb(PIT_COMMAND, 0x36);
         outb(PIT_CHANNEL0, (divisor & 0xFF) as u8);

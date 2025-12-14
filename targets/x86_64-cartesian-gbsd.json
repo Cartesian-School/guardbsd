@@ -14,9 +14,7 @@
   "features": "-mmx",
   "relocation-model": "static",
   "code-model": "kernel",
-  "position-independent-executables": false,
   "stack-probes": {"kind": "none"},
-  "position-independent-executables": false,
   "pre-link-args": {
     "ld.lld": [
       "-nostdlib",

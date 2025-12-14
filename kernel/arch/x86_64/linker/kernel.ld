@@ -26,6 +26,7 @@ SECTIONS
   .text ALIGN(0x1000) : {
     KEEP(*(.text._start))
     KEEP(*(.text.boot))
+    KEEP(*(.text.long_mode_entry))
     *(.text .text.*)
   } :text
 

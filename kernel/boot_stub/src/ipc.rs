@@ -168,7 +168,13 @@ pub fn ipc_create_port(owner_pid: usize) -> isize {
     }
 }
 
-pub fn ipc_send(port_id: usize, sender_pid: usize, receiver_pid: usize, msg_type: u32, data: [u32; 4]) -> isize {
+pub fn ipc_send(
+    port_id: usize,
+    sender_pid: usize,
+    receiver_pid: usize,
+    msg_type: u32,
+    data: [u32; 4],
+) -> isize {
     let msg = Message {
         sender_pid,
         receiver_pid,
@@ -186,9 +192,7 @@ pub fn ipc_send(port_id: usize, sender_pid: usize, receiver_pid: usize, msg_type
 }
 
 pub fn ipc_receive(port_id: usize) -> Option<Message> {
-    unsafe {
-        IPC_MANAGER.assume_init_mut().receive_message(port_id)
-    }
+    unsafe { IPC_MANAGER.assume_init_mut().receive_message(port_id) }
 }
 
 pub fn ipc_close_port(port_id: usize) -> isize {
@@ -234,21 +238,27 @@ impl MicrokernelChannels {
     pub fn send_to_space(&mut self, mut msg: Message) -> bool {
         msg.receiver_pid = 1; // µK-Space PID
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.space_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.space_port, msg)
         }
     }
 
     pub fn send_to_time(&mut self, mut msg: Message) -> bool {
         msg.receiver_pid = 2; // µK-Time PID
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.time_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.time_port, msg)
         }
     }
 
     pub fn send_to_ipc(&mut self, mut msg: Message) -> bool {
         msg.receiver_pid = 3; // µK-IPC PID
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.ipc_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.ipc_port, msg)
         }
     }
 }
@@ -296,28 +306,36 @@ impl ServerChannels {
             return false;
         }
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.init_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.init_port, msg)
         }
     }
 
     pub fn send_to_vfs(&mut self, mut msg: Message) -> bool {
         msg.receiver_pid = 5; // VFS server PID
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.vfs_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.vfs_port, msg)
         }
     }
 
     pub fn send_to_ramfs(&mut self, mut msg: Message) -> bool {
         msg.receiver_pid = 6; // RAMFS server PID
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.ramfs_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.ramfs_port, msg)
         }
     }
 
     pub fn send_to_devd(&mut self, mut msg: Message) -> bool {
         msg.receiver_pid = 7; // DEVD server PID
         unsafe {
-            IPC_MANAGER.assume_init_mut().send_message(self.devd_port, msg)
+            IPC_MANAGER
+                .assume_init_mut()
+                .send_message(self.devd_port, msg)
         }
     }
 }
@@ -390,13 +408,9 @@ pub static mut SERVICE_REGISTRY: ServiceRegistry = ServiceRegistry {
 };
 
 pub fn register_service(name: &str, port: usize, pid: usize) -> bool {
-    unsafe {
-        SERVICE_REGISTRY.register(name, port, pid)
-    }
+    unsafe { SERVICE_REGISTRY.register(name, port, pid) }
 }
 
 pub fn lookup_service(name: &str) -> Option<(usize, usize)> {
-    unsafe {
-        SERVICE_REGISTRY.lookup(name).map(|svc| (svc.port, svc.pid))
-    }
+    unsafe { SERVICE_REGISTRY.lookup(name).map(|svc| (svc.port, svc.pid)) }
 }

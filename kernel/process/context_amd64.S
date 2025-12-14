@@ -15,7 +15,7 @@
 /*
  * Context structure (must match Rust/C definition):
  * 
- * struct Context {
+ * struct Context
  *     uint64_t r15;      // offset 0
  *     uint64_t r14;      // offset 8
  *     uint64_t r13;      // offset 16
@@ -36,7 +36,7 @@
  *     uint64_t rflags;   // offset 136
  *     uint64_t cs;       // offset 144
  *     uint64_t ss;       // offset 152
- * };
+ * ;
  */
 
 /*

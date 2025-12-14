@@ -20,6 +20,11 @@ _start:
     cli                         /* Disable interrupts */
     cld                         /* Clear direction flag */
 
+    /* Ultra-early serial bring-up and breadcrumb: confirm we reached _start */
+    call init_serial_early
+    movb $'S', %al
+    call write_breadcrumb
+
     /* Patch TSS descriptor base into GDT before loading */
     lea tss64(%rip), %rax
     movw %ax, gdt64_tss_base0(%rip)
@@ -33,9 +38,15 @@ _start:
     /* Load GDT with user segments and TSS descriptor */
     lgdt gdt64_ptr(%rip)
 
+    /* Install minimal early IDT for diagnostics (GPF/PGF/DF) */
+    lea early_idt_ptr(%rip), %rax
+    lidt (%rax)
+
     /* Set up stack early so we can call helpers safely */
     lea stack_top(%rip), %rsp
     mov %rsp, %rbp
+    movb $'T', %al
+    call write_breadcrumb
 
     /* Initialize TSS.RSP0 */
     lea tss_stack_top(%rip), %rax
@@ -49,12 +60,13 @@ _start:
     /* Save bootinfo pointer */
     mov %edi, guaboot_magic(%rip)
     mov %rsi, guaboot_bootinfo_ptr(%rip)
-
-    /* Early serial for validation output */
-    call init_serial_early
+    movb $'I', %al
+    call write_breadcrumb
 
     /* Validate CPU is really in long mode (LMA set in IA32_EFER) */
     call check_long_mode
+    movb $'L', %al
+    call write_breadcrumb
     
     /* Zero BSS section */
     lea __bss_start(%rip), %rdi
@@ -64,6 +76,8 @@ _start:
     rep stosb
     
     /* Call Rust kernel entry */
+    movb $'G', %al
+    call write_breadcrumb
     call guardbsd_main
     
     /* Kernel returned - halt */
@@ -96,6 +110,7 @@ stack_top:
 .align 16
 tss_stack_bottom:
     .skip 8192
+.global tss_stack_top
 tss_stack_top:
 
 /* BSS markers */
@@ -239,3 +254,166 @@ msg_long_mode_fail:
     .asciz "Bootloader failed to enter 64-bit long mode\n"
 
 .equ COM1, 0x3F8
+
+/* Early breadcrumb buffer (not in .bss so it survives zeroing) */
+.section .data
+.align 8
+.global early_trace
+early_trace:
+    .space 64
+.global early_trace_idx
+early_trace_idx:
+    .quad 0
+
+.section .text
+/* Early breadcrumb buffer (not in .bss so it survives zeroing) */
+.section .data
+.align 8
+.global early_trace
+early_trace:
+    .space 64
+.global early_trace_idx
+early_trace_idx:
+    .quad 0
+
+.section .text
+
+/* Record a breadcrumb: store in memory buffer and emit to COM1 (best-effort). */
+write_breadcrumb:
+    push %rax
+    push %rbx
+    push %rcx
+    push %rdx
+    mov %al, %bl
+    movl early_trace_idx(%rip), %ecx
+    cmp $64, %ecx
+    jae 1f
+    lea early_trace(%rip), %rdx
+    mov %bl, (%rdx,%rcx,1)
+    inc %ecx
+    mov %ecx, early_trace_idx(%rip)
+1:
+    movw $COM1 + 5, %dx
+2:  inb %dx, %al
+    test $0x20, %al
+    jz 2b
+    mov %bl, %al
+    movw $COM1, %dx
+    outb %al, %dx
+    pop %rdx
+    pop %rcx
+    pop %rbx
+    pop %rax
+    ret
+
+/* Simple hex printer for diagnostics: prints 0x followed by 16 hex digits from RDI */
+early_puthex64:
+    push %rax
+    push %rbx
+    push %rcx
+    push %rdx
+    mov %rdi, %rax
+    lea hex_prefix(%rip), %rsi
+    call write_serial_string
+    mov $16, %rcx
+1:
+    mov %rax, %rbx
+    and $0xF, %rbx
+    shr $4, %rax
+    movzbq hex_digits(%rbx,%rip), %rbx
+    mov %rbx, %rdx
+    movw $COM1 + 5, %dx
+2:  inb %dx, %al
+    test $0x20, %al
+    jz 2b
+    mov %bl, %al
+    movw $COM1, %dx
+    outb %al, %dx
+    loop 1b
+    movb $'\n', %al
+    movw $COM1 + 5, %dx
+3:  inb %dx, %al
+    test $0x20, %al
+    jz 3b
+    movw $COM1, %dx
+    outb %al, %dx
+    pop %rdx
+    pop %rcx
+    pop %rbx
+    pop %rax
+    ret
+
+/* Exception handlers */
+.global early_gp_handler
+.global early_pf_handler
+.global early_df_handler
+
+early_gp_handler:
+    push %rbp
+    mov %rsp, %rbp
+    lea msg_gp(%rip), %rsi
+    call write_serial_string
+    mov %rdi, %rax
+    lea msg_err(%rip), %rsi
+    call write_serial_string
+    mov (%rbp), %rdi
+    call early_puthex64
+    lea msg_rip(%rip), %rsi
+    call write_serial_string
+    mov 8(%rbp), %rdi
+    call early_puthex64
+    lea msg_rsp(%rip), %rsi
+    call write_serial_string
+    mov 32(%rbp), %rdi
+    call early_puthex64
+    jmp .Lhalt_forever
+
+early_pf_handler:
+    push %rbp
+    mov %rsp, %rbp
+    lea msg_pf(%rip), %rsi
+    call write_serial_string
+    lea msg_err(%rip), %rsi
+    call write_serial_string
+    mov (%rbp), %rdi
+    call early_puthex64
+    mov %cr2, %rdi
+    lea msg_cr2(%rip), %rsi
+    call write_serial_string
+    call early_puthex64
+    lea msg_rip(%rip), %rsi
+    call write_serial_string
+    mov 8(%rbp), %rdi
+    call early_puthex64
+    lea msg_rsp(%rip), %rsi
+    call write_serial_string
+    mov 32(%rbp), %rdi
+    call early_puthex64
+    jmp .Lhalt_forever
+
+early_df_handler:
+    push %rbp
+    mov %rsp, %rbp
+    lea msg_df(%rip), %rsi
+    call write_serial_string
+    jmp .Lhalt_forever
+
+.Lhalt_forever:
+    cli
+    .Lloop:
+        pause
+        jmp .Lloop
+
+.section .rodata
+.align 8
+hex_prefix:
+    .asciz "0x"
+hex_digits:
+    .ascii "0123456789abcdef"
+msg_gp: .asciz "[EARLY] #GP\n"
+msg_pf: .asciz "[EARLY] #PF\n"
+msg_df: .asciz "[EARLY] #DF\n"
+msg_err: .asciz " err="
+msg_rip: .asciz " rip="
+msg_rsp: .asciz " rsp="
+msg_cr2: .asciz " cr2="

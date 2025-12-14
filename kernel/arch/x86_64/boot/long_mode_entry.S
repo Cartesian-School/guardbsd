@@ -12,21 +12,25 @@
 .global long_mode_entry
 .type long_mode_entry, @function
 
-// This entry assumes we were entered from 32-bit protected mode with paging off.
-// It enables PAE, long mode, paging, sets up a temporary stack, and jumps to
-// kernel_main_x86_64 in 64-bit mode.
-
 long_mode_entry:
     cli
+    
+    // =========== DEBUG: Powiadom że weszliśmy ===========
+    mov dx, 0x3F8
+    mov al, 'L'
+    out dx, al
+    mov al, 'M'
+    out dx, al
+    mov al, ' '
+    out dx, al
+    // ===================================================
 
     // Enable PAE
     mov eax, cr4
     or eax, 1 << 5          // CR4.PAE
     mov cr4, eax
 
-    // Point CR3 to an identity-mapped PML4 (assumed provided by bootloader)
-    // Placeholder: bootloader must set up minimal page tables; use symbol if exported.
-    // For now, expect bootloader to place PML4 physical address in ebx.
+    // Point CR3 to PML4 (bootloader powinien dać w EBX)
     mov eax, ebx
     mov cr3, eax
 
@@ -38,29 +42,66 @@ long_mode_entry:
 
     // Enable paging and protection
     mov eax, cr0
-    or eax, 1 << 31         // PG
-    or eax, 1 << 0          // PE
+    or eax, (1 << 31) | (1 << 0)  // PG | PE
     mov cr0, eax
 
     // Load 64-bit GDT
     lgdt [gdt64_descriptor]
+    
+    // =========== DEBUG przed skokiem ===========
+    mov dx, 0x3F8
+    mov al, 'J'
+    out dx, al
+    mov al, 'U'
+    out dx, al
+    mov al, 'M'
+    out dx, al
+    mov al, 'P'
+    out dx, al
+    mov al, 0x0A
+    out dx, al
+    // ===========================================
 
-    // Far jump to 64-bit code segment to switch to long mode
-    pushq $0x08             // 64-bit code segment selector
-    lea rax, [rip + long_mode_start]
-    push rax
-    retfq
+    // Far jump to 64-bit code segment
+    jmp 0x08:long_mode_start64
 
+// Teraz 64-bit code
 .code64
-long_mode_start:
+long_mode_start64:
     // Set up data segments
-    mov ax, 0x10            // 64-bit data segment selector
+    mov ax, 0x10
     mov ds, ax
     mov es, ax
+    mov fs, ax
+    mov gs, ax
     mov ss, ax
 
-    // Set up stack (bootloader should supply stack phys in a register; fallback to symbol)
-    lea rsp, [rip + long_mode_stack_top]
+    // Set up stack
+    mov rsp, offset long_mode_stack_top
+    mov rbp, rsp
+    
+    // =========== DEBUG w 64-bit ===========
+    mov dx, 0x3F8
+    mov al, '6'
+    out dx, al
+    mov al, '4'
+    out dx, al
+    mov al, 'B'
+    out dx, al
+    mov al, 'I'
+    out dx, al
+    mov al, 'T'
+    out dx, al
+    mov al, 0x0A
+    out dx, al
+    // =====================================
+
+    // Zero out .bss
+    mov rdi, offset __bss_start
+    mov rcx, offset __bss_end
+    sub rcx, rdi
+    xor rax, rax
+    rep stosb
 
     // Call Rust entry
     extern kernel_main_x86_64
@@ -72,12 +113,9 @@ long_mode_start:
 
 .align 8
 gdt64:
-    // Null descriptor
     .quad 0x0000000000000000
-    // Code: base=0 limit=0xfffff, flags: present, ring0, executable, readable, long mode
-    .quad 0x00af9a000000ffff
-    // Data: base=0 limit=0xfffff, flags: present, ring0, writable
-    .quad 0x00af92000000ffff
+    .quad 0x00af9a000000ffff  // Code
+    .quad 0x00af92000000ffff  // Data
 
 gdt64_descriptor:
     .word gdt64_descriptor_end - gdt64 - 1
@@ -87,5 +125,8 @@ gdt64_descriptor_end:
 .comm long_mode_stack, 0x4000, 16
 long_mode_stack_top:
     .quad long_mode_stack + 0x4000
+
+.extern __bss_start
+.extern __bss_end
 
 .size long_mode_entry, .-long_mode_entry

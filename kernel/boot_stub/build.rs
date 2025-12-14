@@ -1,51 +1,53 @@
-//! Project: GuardBSD Winter Saga version 1.0.0
-//! Package: boot_stub_build
-//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
-//! License: BSD-3-Clause
-//!
-//! Skrypt build.rs do kompilacji asemblera boot stuba.
+use std::env;
+use std::path::{Path, PathBuf};
 
 fn main() {
-    // Build GuaBoot entry point (FreeBSD-style, NO multiboot)
-    cc::Build::new()
-        .file("src/guaboot_entry.S")
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    let mut libs = Vec::new();
+    libs.push(compile_asm(
+        &out_dir,
+        "src/guaboot_entry.S",
+        "guaboot_entry",
+    ));
+    libs.push(compile_asm(
+        &out_dir,
+        "../interrupt/keyboard_irq.S",
+        "keyboard_irq",
+    ));
+    libs.push(compile_asm(
+        &out_dir,
+        "../interrupt/timer_irq.S",
+        "timer_irq",
+    ));
+    libs.push(compile_asm(
+        &out_dir,
+        "../interrupt/syscall_entry.S",
+        "syscall_entry",
+    ));
+    libs.push(compile_asm(
+        &out_dir,
+        "../process/context_amd64.S",
+        "context",
+    ));
+
+    println!("cargo:rustc-link-arg=--whole-archive");
+    for lib in libs {
+        println!("cargo:rustc-link-arg={}", lib.display());
+    }
+    println!("cargo:rustc-link-arg=--no-whole-archive");
+}
+
+fn compile_asm(out_dir: &Path, src: &str, name: &str) -> PathBuf {
+    let path = Path::new(src);
+    let mut build = cc::Build::new();
+    build
+        .cargo_metadata(false)
+        .file(path)
         .flag("-m64")
-        .compile("guaboot_entry");
-    println!("cargo:rerun-if-changed=src/guaboot_entry.S");
+        .compile(name);
 
-    // Long mode transition not yet implemented
-    // cc::Build::new()
-    //     .file("src/long_mode.S")
-    //     .compile("long_mode");
-    // println!("cargo:rerun-if-changed=src/long_mode.S");
+    println!("cargo:rerun-if-changed={}", path.display());
 
-    // Syscall entry is 64-bit only, not needed for 32-bit boot stub
-    // cc::Build::new()
-    //     .file("../interrupt/syscall_entry.S")
-    //     .compile("syscall_entry");
-    // println!("cargo:rerun-if-changed=../interrupt/syscall_entry.S");
-
-    cc::Build::new()
-        .file("../interrupt/keyboard_irq.S")
-        .flag("-m64")
-        .compile("keyboard_irq");
-    println!("cargo:rerun-if-changed=../interrupt/keyboard_irq.S");
-
-    cc::Build::new()
-        .file("../interrupt/timer_irq.S")
-        .flag("-m64")
-        .compile("timer_irq");
-    println!("cargo:rerun-if-changed=../interrupt/timer_irq.S");
-
-    cc::Build::new()
-        .file("../interrupt/syscall_entry.S")
-        .flag("-m64")
-        .compile("syscall_entry");
-    println!("cargo:rerun-if-changed=../interrupt/syscall_entry.S");
-
-    cc::Build::new()
-        .file("../process/context_amd64.S")
-        .flag("-m64")
-        .compile("context");
-    println!("cargo:rerun-if-changed=../process/context_amd64.S");
+    out_dir.join(format!("lib{}.a", name))
 }

@@ -48,11 +48,11 @@ bitflags::bitflags! {
 
 fn map_errno_to_kf_error(errno: i32) -> KfError {
     match errno {
-        -2 => KfError::NoSuchFile,     // ENOENT
-        -13 => KfError::AccessDenied,  // EACCES
-        -5 => KfError::IoError,        // EIO
-        -95 => KfError::InvalidFlags,  // EOPNOTSUPP
-        -6 => KfError::VfsDown,        // arbitrary: service missing
+        -2 => KfError::NoSuchFile,    // ENOENT
+        -13 => KfError::AccessDenied, // EACCES
+        -5 => KfError::IoError,       // EIO
+        -95 => KfError::InvalidFlags, // EOPNOTSUPP
+        -6 => KfError::VfsDown,       // arbitrary: service missing
         _ => KfError::Unknown(errno),
     }
 }
@@ -60,14 +60,11 @@ fn map_errno_to_kf_error(errno: i32) -> KfError {
 fn syscall_open(path_cstr: *const u8, flags: u32, mode: u32) -> i32 {
     let ret: isize;
     unsafe {
-        core::arch::asm!(
-            "int 0x80",
-            in("rax") SYS_OPEN as u64,
-            in("rdi") path_cstr as u64,
-            in("rsi") flags as u64,
-            in("rdx") mode as u64,
-            lateout("rax") ret,
-            options(nostack)
+        ret = fs_syscall3(
+            SYS_OPEN as usize,
+            path_cstr as usize,
+            flags as usize,
+            mode as usize,
         );
     }
     ret as i32
@@ -76,15 +73,7 @@ fn syscall_open(path_cstr: *const u8, flags: u32, mode: u32) -> i32 {
 fn syscall_write(fd: i32, buf: *const u8, len: usize) -> i32 {
     let ret: isize;
     unsafe {
-        core::arch::asm!(
-            "int 0x80",
-            in("rax") SYS_WRITE as u64,
-            in("rdi") fd as u64,
-            in("rsi") buf as u64,
-            in("rdx") len as u64,
-            lateout("rax") ret,
-            options(nostack)
-        );
+        ret = fs_syscall3(SYS_WRITE as usize, fd as usize, buf as usize, len);
     }
     ret as i32
 }
@@ -92,16 +81,41 @@ fn syscall_write(fd: i32, buf: *const u8, len: usize) -> i32 {
 fn syscall_mkdir(path_cstr: *const u8) -> i32 {
     let ret: isize;
     unsafe {
-        core::arch::asm!(
-            "int 0x80",
-            in("rax") SYS_MKDIR as u64,
-            in("rdi") path_cstr as u64,
-            in("rsi") 0u64,
-            lateout("rax") ret,
-            options(nostack)
-        );
+        ret = fs_syscall3(SYS_MKDIR as usize, path_cstr as usize, 0, 0);
     }
     ret as i32
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+unsafe fn fs_syscall3(num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
+    let ret: i64;
+    core::arch::asm!(
+        "syscall",
+        in("rax") num as u64,
+        in("rdi") arg1 as u64,
+        in("rsi") arg2 as u64,
+        in("rdx") arg3 as u64,
+        lateout("rax") ret,
+        options(nostack, preserves_flags),
+    );
+    ret as isize
+}
+
+#[cfg(target_arch = "x86")]
+#[inline(always)]
+unsafe fn fs_syscall3(num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
+    let ret: i32;
+    core::arch::asm!(
+        "int 0x80",
+        in("eax") num as u32,
+        in("ebx") arg1 as u32,
+        in("ecx") arg2 as u32,
+        in("edx") arg3 as u32,
+        lateout("eax") ret,
+        options(nostack),
+    );
+    ret as isize
 }
 
 fn vfs_open(path: &str, flags: u32, mode: u32) -> Result<i32, i32> {

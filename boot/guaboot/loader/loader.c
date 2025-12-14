@@ -192,6 +192,17 @@ static uint32_t crc32_calc(const uint8_t *data, uint32_t len) {
     return crc ^ 0xFFFFffff;
 }
 
+static inline void debug_e9(char ch) {
+    __asm__ volatile (
+        "push %%ax\n"
+        "movb %0, %%al\n"
+        "out  $0xE9, %%al\n"
+        "pop  %%ax\n"
+        :
+        : "r"(ch)
+        : "al");
+}
+
 static void build_bootinfo(void) {
     bootinfo.magic = GBSD_MAGIC;
     bootinfo.version = 1;
@@ -294,14 +305,20 @@ static void enable_long_mode_and_jump(uint64_t entry_point) {
     // Set a 64-bit friendly stack (aligned)
     __asm__ volatile("movl $0x200000, %%esp" : : );
 
+    debug_e9('A');
+
     // Enable PAE
     uint32_t cr4;
     __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
     cr4 |= (1 << 5);
     __asm__ volatile("mov %0, %%cr4" : : "r"(cr4));
 
+    debug_e9('C');
+
     // Load PML4
     __asm__ volatile("mov %0, %%cr3" : : "r"(pml4));
+
+    debug_e9('B');
 
     // Enable LME and NXE
     uint32_t eax, edx;
@@ -310,11 +327,15 @@ static void enable_long_mode_and_jump(uint64_t entry_point) {
     eax |= (1 << 11);  // NXE
     __asm__ volatile("mov $0xC0000080, %%ecx; wrmsr" : : "a"(eax), "d"(edx), "c"(0xC0000080));
 
+    debug_e9('D');
+
     // Enable paging
     uint32_t cr0;
     __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
     cr0 |= (1 << 31); // PG
     __asm__ volatile("mov %0, %%cr0" : : "r"(cr0));
+
+    debug_e9('E');
 
     // Jump to 64-bit transition stub (entry64.bin loaded at ENTRY64_LINEAR)
     struct far_ptr target = {

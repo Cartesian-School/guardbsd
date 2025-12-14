@@ -9,6 +9,13 @@
 
 [BITS 64]
 
+%macro E9 1
+    push ax
+    mov al, %1
+    out 0xE9, al
+    pop ax
+%endmacro
+
 %define GBSD_MAGIC 0x42534447
 %define BOOTINFO_PTR 0x7010
 
@@ -17,6 +24,7 @@ global entry64_stub
 section .text
 
 entry64_stub:
+    E9 'F'
     ; Load 64-bit data selectors (same GDT as loader)
     mov ax, 0x10
     mov ds, ax
@@ -55,4 +63,5 @@ entry64_stub:
 
     ; Load kernel entry pointer written by loader at 0x7004
     mov rax, [abs 0x7004]
+    E9 'G'
     jmp rax

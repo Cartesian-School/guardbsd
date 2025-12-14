@@ -37,26 +37,26 @@ extern "C" {
     // fn syscall_entry(); // Commented out - 64-bit only
     fn keyboard_irq_handler();
     fn timer_irq_handler();
-    fn syscall_int80_entry();
+    fn syscall_entry();
 }
 
 pub fn init_idt() {
     unsafe {
         // Set timer interrupt (IRQ0 = 0x20)
         set_idt_entry(0x20, timer_irq_handler as u64, 0x08, 0x8E);
-        
+
         // Set keyboard interrupt (IRQ1 = 0x21)
         set_idt_entry(0x21, keyboard_irq_handler as u64, 0x08, 0x8E);
 
         // Set syscall interrupt (0x80) with DPL=3
-        set_idt_entry(0x80, syscall_int80_entry as u64, 0x08, 0xEE);
-        
+        set_idt_entry(0x80, syscall_entry as u64, 0x08, 0xEE);
+
         // Load IDT
         let idtr = IdtPtr {
             limit: (core::mem::size_of::<[IdtEntry; 256]>() - 1) as u16,
             base: &IDT as *const _ as u64,
         };
-        
+
         core::arch::asm!("lidt [{}]", in(reg) &idtr, options(readonly, nostack, preserves_flags));
     }
 }

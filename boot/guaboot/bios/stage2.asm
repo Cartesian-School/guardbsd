@@ -13,12 +13,12 @@
 .set KERNEL_LOAD_SEG,  0x1000        # -> 0x10000 phys
 .set KERNEL_BYTES,     0x8000        # 16 * 2048 (headroom for kernel image)
 .set KERNEL_PTR_ADDR,  0x7000        # where we stash kernel phys for loader
-.set KERNEL_LBA,       57            # updated after ISO build
-.set KERNEL_SECTORS,   16            # read full kernel.elf (ceil(size/2048))
+.set KERNEL_LBA,       59            # updated after ISO build
+.set KERNEL_SECTORS,   10            # read full kernel.elf (ceil(size/2048))
 .set LOADER_SEG,       0x0800        # 0x8000 phys
 .set LOADER_OFFSET,    0x0000
 .set LOADER_LBA,       52            # updated after ISO build
-.set LOADER_SECTORS,   5             # ~8KB loader.bin
+.set LOADER_SECTORS,   7             # ~8KB loader.bin
 .set LOADER_LINEAR,    (LOADER_SEG << 4)
 .set ENTRY64_SEG,      0x0F00        # 0x0000F000 phys (loader handoff stub, away from loader/BSS)
 .set ENTRY64_OFFSET,   0x0000
