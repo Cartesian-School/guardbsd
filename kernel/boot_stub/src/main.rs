@@ -3,15 +3,15 @@
 //! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
 //! License: BSD-3-Clause
 //!
-//! Główny moduł boot stuba GuardBSD (wejście do jądra).
+//! GuardBSD boot stub main module (kernel entry).
 
 #![no_std]
 #![no_main]
 
 use core::convert::TryInto;
-use core::mem;
+use core::ffi::c_void;
 use core::panic::PanicInfo;
-use core::ptr;
+use core::str;
 
 mod drivers;
 mod fs;
@@ -24,51 +24,139 @@ mod process;
 mod sched;
 mod syscalls;
 
+// ============================================================================
+// Errno constants (local to boot_stub; negative Linux-style values)
+// ============================================================================
+const ENOSYS: isize = -38;
+const EINVAL: isize = -22;
+const EFAULT: isize = -14;
+const EIO: isize = -5;
+const ERANGE: isize = -34;
+
+// ============================================================================
+// Port I/O helpers (must be defined before first use)
+// ============================================================================
+#[inline(always)]
+pub unsafe fn outb(port: u16, val: u8) {
+    core::arch::asm!("out dx, al", in("dx") port, in("al") val, options(nomem, nostack, preserves_flags));
+}
+
+#[inline(always)]
+pub unsafe fn inb(port: u16) -> u8 {
+    let ret: u8;
+    core::arch::asm!("in al, dx", out("al") ret, in("dx") port, options(nomem, nostack, preserves_flags));
+    ret
+}
+
 mod syscall {
-    // Import canonical syscall numbers from shared crate
-    use shared::syscall_numbers::*;
+    //! Syscall dispatch layer for boot_stub.
+    //!
+    //! IMPORTANT:
+    //! - This boot_stub build MUST NOT depend on external crates like `shared`.
+    //! - Therefore syscall numbers are defined locally here.
+    //!
+    //! If/when you add the real `shared` crate later, you can switch these constants
+    //! back to canonical values.
+
+    use super::{EFAULT, EINVAL, EIO, ENOSYS, ERANGE};
+
+    // ------------------------------------------------------------------------
+    // Syscall numbers (local, boot_stub only)
+    // ------------------------------------------------------------------------
+    // Keep the "classic" ones compatible with x86_64 Linux where reasonable,
+    // and assign your custom ones in a high range to avoid collisions.
+    pub(crate) const SYS_WRITE: usize = 1;
+    pub(crate) const SYS_READ: usize = 0;
+    pub(crate) const SYS_OPEN: usize = 2;   // boot_stub local (not Linux)
+    pub(crate) const SYS_CLOSE: usize = 3;  // boot_stub local (not Linux)
+
+    pub(crate) const SYS_EXIT: usize = 60;
+    pub(crate) const SYS_GETPID: usize = 39;
+    pub(crate) const SYS_FORK: usize = 57;
+    pub(crate) const SYS_EXEC: usize = 59;   // execve-like
+    pub(crate) const SYS_WAIT: usize = 61;   // wait4-like
+    pub(crate) const SYS_YIELD: usize = 24_000; // custom
+
+    pub(crate) const SYS_SIGNAL: usize = 24_010;         // custom
+    pub(crate) const SYS_SIGACTION: usize = 24_011;      // custom
+    pub(crate) const SYS_SIGNAL_REGISTER: usize = 24_012; // custom
+    pub(crate) const SYS_SIGRETURN: usize = 24_013;      // custom
+    pub(crate) const SYS_WAITPID: usize = 24_014;        // custom
+
+    // Job control / process groups
+    pub(crate) const SYS_KILL: usize = 62;   // kill-like
+    pub(crate) const SYS_SETPGID: usize = 24_020;
+    pub(crate) const SYS_GETPGID: usize = 24_021;
+
+    // FD management / VFS
+    pub(crate) const SYS_DUP: usize = 24_100;
+    pub(crate) const SYS_DUP2: usize = 24_101;
+    pub(crate) const SYS_STAT: usize = 24_102;
+    pub(crate) const SYS_MKDIR: usize = 24_103;
+    pub(crate) const SYS_UNLINK: usize = 24_104;
+    pub(crate) const SYS_RENAME: usize = 24_105;
+    pub(crate) const SYS_SYNC: usize = 24_106;
+    pub(crate) const SYS_CHDIR: usize = 24_107;
+    pub(crate) const SYS_GETCWD: usize = 24_108;
+    pub(crate) const SYS_MOUNT: usize = 24_109;
+    pub(crate) const SYS_UMOUNT: usize = 24_110;
+
+    pub(crate) const SYS_CONSOLE_READ: usize = 24_120;
+    pub(crate) const SYS_TCSETPGRP: usize = 24_121;
+    pub(crate) const SYS_TCGETPGRP: usize = 24_122;
+
+    // Logging
+    pub(crate) const SYS_LOG_READ: usize = 24_200;
+    pub(crate) const SYS_LOG_ACK: usize = 24_201;
+    pub(crate) const SYS_LOG_REGISTER_DAEMON: usize = 24_202;
+
+    // Service registry
+    pub(crate) const SYS_SERVICE_REGISTER: usize = 24_300;
+
+    // IPC
+    pub(crate) const SYS_IPC_PORT_CREATE: usize = 24_400;
+    pub(crate) const SYS_IPC_SEND: usize = 24_401;
+    pub(crate) const SYS_IPC_RECV: usize = 24_402;
 
     pub fn syscall_handler(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
-        // Day 29: Updated syscall handler - delegate to main kernel implementations
+        // Delegate to main kernel implementations where available.
         match syscall_num {
-            // Process management (Day 29)
+            // Process management
             SYS_EXIT => {
                 crate::syscalls::process::sys_exit(arg1 as i32);
                 0
             }
             SYS_GETPID => crate::syscalls::process::sys_getpid(),
             SYS_FORK => crate::syscalls::process::sys_fork(),
-            SYS_EXEC => {
-                crate::syscalls::process::sys_exec(arg1 as *const u8, arg2 as *const *const u8)
-            }
+            SYS_EXEC => crate::syscalls::process::sys_exec(arg1 as *const u8, arg2 as *const *const u8),
             SYS_WAIT => crate::syscalls::process::sys_wait(arg1 as *mut i32),
             SYS_YIELD => {
-                // Yield to scheduler
                 crate::sched::yield_current();
                 0
             }
 
-            // Signal management (Day 29)
-            SYS_KILL => crate::syscalls::signal::sys_kill(arg1, arg2 as i32),
+            // Signals
             SYS_SIGNAL => crate::syscalls::signal::sys_signal(arg2 as i32, arg1 as u64),
             SYS_SIGACTION => crate::syscalls::signal::sys_sigaction(
                 arg1 as i32,
-                arg2 as *const core::ffi::c_void,
-                arg3 as *mut core::ffi::c_void,
+                arg2 as *const c_void,
+                arg3 as *mut c_void,
             ),
-            shared::syscall_numbers::SYS_SIGNAL_REGISTER => {
-                crate::syscalls::signal::sys_signal(arg1 as i32, arg2 as u64)
-            }
-            shared::syscall_numbers::SYS_SIGRETURN => crate::syscalls::signal::sys_sigreturn(),
-            shared::syscall_numbers::SYS_WAITPID => {
-                crate::syscalls::process::sys_waitpid(arg1 as isize, arg2 as *mut i32, arg3 as i32)
-            }
+            SYS_SIGNAL_REGISTER => crate::syscalls::signal::sys_signal(arg1 as i32, arg2 as u64),
+            SYS_SIGRETURN => crate::syscalls::signal::sys_sigreturn(),
+            SYS_WAITPID => crate::syscalls::process::sys_waitpid(arg1 as isize, arg2 as *mut i32, arg3 as i32),
 
-            // File operations (Day 31: Full VFS/RAMFS integration via IPC)
+            // Job control (preferred mapping for SYS_KILL / waitpid variant)
+            SYS_KILL => crate::syscalls::process_jobctl::sys_kill(arg1 as isize, arg2 as i32),
+            SYS_SETPGID => crate::syscalls::process_jobctl::sys_setpgid(arg1, arg2),
+            SYS_GETPGID => crate::syscalls::process_jobctl::sys_getpgid(arg1),
+
+            // File operations
             SYS_WRITE => crate::syscalls::fs::sys_write(arg1 as u32, arg2 as *const u8, arg3),
             SYS_READ => crate::syscalls::fs::sys_read(arg1 as u32, arg2 as *mut u8, arg3),
             SYS_OPEN => crate::syscalls::fs::sys_open(arg1 as *const u8, arg2 as u32),
             SYS_CLOSE => crate::syscalls::fs::sys_close(arg1 as u32),
+
             SYS_DUP => crate::syscalls::fs::sys_dup(arg1),
             SYS_DUP2 => crate::syscalls::fs::sys_dup2(arg1, arg2),
             SYS_STAT => crate::syscalls::fs::sys_stat(arg1 as *const u8, arg2 as *mut u8),
@@ -84,146 +172,26 @@ mod syscall {
             SYS_TCSETPGRP => crate::syscalls::fs::sys_tcsetpgrp(arg1 as u32, arg2),
             SYS_TCGETPGRP => crate::syscalls::fs::sys_tcgetpgrp(arg1 as u32),
 
-            SYS_KILL => crate::syscalls::process_jobctl::sys_kill(arg1 as isize, arg2 as i32),
-            SYS_WAITPID => crate::syscalls::process_jobctl::sys_waitpid(
-                arg1 as isize,
-                arg2 as *mut i32,
-                arg3 as u32,
-            ),
-            SYS_SETPGID => crate::syscalls::process_jobctl::sys_setpgid(arg1, arg2),
-            SYS_GETPGID => crate::syscalls::process_jobctl::sys_getpgid(arg1),
-
             // Logging
             SYS_LOG_READ => crate::syscalls::log::sys_log_read(arg1 as *mut u8, arg2 as usize),
             SYS_LOG_ACK => ENOSYS,
             SYS_LOG_REGISTER_DAEMON => ENOSYS,
 
             // Service registry
-            shared::syscall_numbers::SYS_SERVICE_REGISTER => {
-                crate::service_syscall::sys_service_register(arg1 as *const u8, arg2 as usize)
-            }
+            SYS_SERVICE_REGISTER => crate::service_syscall::sys_service_register(arg1 as *const u8, arg2 as usize),
 
             // IPC
             SYS_IPC_PORT_CREATE => sys_ipc_port_create(),
             SYS_IPC_SEND => sys_ipc_send(arg1, arg2, arg3 as u32, [0, 0, 0, 0]),
             SYS_IPC_RECV => sys_ipc_recv(arg1),
 
-            _ => -1, // EINVAL for unknown syscalls
+            _ => EINVAL,
         }
     }
 
-    // File descriptor management
-    const MAX_FDS: usize = 256;
-    static mut OPEN_FDS: [Option<FileDescriptor>; MAX_FDS] = [None; MAX_FDS];
-
-    #[derive(Clone, Copy)]
-    struct FileDescriptor {
-        inode: u64,
-        offset: u64,
-        flags: u32,
-    }
-
-    // Simple in-kernel RAMFS implementation
-    const MAX_NODES: usize = 256;
-    static mut RAMFS_NODES: [RamFsNode; MAX_NODES] = [RamFsNode::new(); MAX_NODES];
-    static mut RAMFS_NODE_COUNT: usize = 1; // Root directory
-
-    #[derive(Clone, Copy)]
-    struct RamFsNode {
-        name: [u8; 64],
-        name_len: usize,
-        node_type: NodeType,
-        data: [u8; 4096],
-        size: usize,
-        parent: usize,
-    }
-
-    #[derive(Clone, Copy, PartialEq)]
-    enum NodeType {
-        File,
-        Directory,
-    }
-
-    impl RamFsNode {
-        const fn new() -> Self {
-            RamFsNode {
-                name: [0; 64],
-                name_len: 0,
-                node_type: NodeType::File,
-                data: [0; 4096],
-                size: 0,
-                parent: 0,
-            }
-        }
-
-        fn set_name(&mut self, name: &[u8]) {
-            let len = name.len().min(64);
-            self.name[..len].copy_from_slice(&name[..len]);
-            self.name_len = len;
-        }
-
-        fn name_matches(&self, name: &[u8]) -> bool {
-            self.name_len == name.len() && &self.name[..self.name_len] == name
-        }
-    }
-
-    pub(crate) fn init_ramfs() {
-        unsafe {
-            // Initialize root directory
-            RAMFS_NODES[0].set_name(b"/");
-            RAMFS_NODES[0].node_type = NodeType::Directory;
-            RAMFS_NODE_COUNT = 1;
-        }
-    }
-
-    // Day 31: Full filesystem implementation via VFS/RAMFS IPC
-    // All filesystem operations now use VFS server (port discovery)
-
-    // VFS server port (discovered during init, or hardcoded)
-    const VFS_PORT: usize = 1000; // VFS server uses dynamic port_create, we'll use known port
-
-    fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
-        // Special handling for stdout/stderr - direct serial output
-        if fd == 1 || fd == 2 {
-            unsafe {
-                if buf.is_null() || len == 0 {
-                    return -1;
-                }
-                let slice = core::slice::from_raw_parts(buf, len);
-                for &byte in slice {
-                    while (super::inb(super::COM1 + 5) & 0x20) == 0 {}
-                    super::outb(super::COM1, byte);
-                }
-            }
-            return len as isize;
-        }
-
-        // Regular file write via VFS
-        vfs_write(fd, buf, len)
-    }
-
-    fn sys_read(fd: usize, buf: *mut u8, len: usize) -> isize {
-        // stdin not implemented yet - return ENOSYS for fd 0
-        if fd == 0 {
-            return ENOSYS;
-        }
-
-        // Regular file read via VFS
-        vfs_read(fd, buf, len)
-    }
-
-    fn sys_open(path: *const u8, flags: usize) -> isize {
-        vfs_open(path, flags)
-    }
-
-    fn sys_close(fd: usize) -> isize {
-        vfs_close(fd)
-    }
-
-    fn sys_stat(path: *const u8, stat_buf: *mut u8) -> isize {
-        vfs_stat(path, stat_buf)
-    }
-
+    // ------------------------------------------------------------------------
+    // File ops that are not yet delegated (simple stubs / VFS helpers)
+    // ------------------------------------------------------------------------
     fn sys_mkdir(path: *const u8, mode: usize) -> isize {
         vfs_mkdir(path, mode)
     }
@@ -232,26 +200,22 @@ mod syscall {
         vfs_unlink(path)
     }
 
-    fn sys_rename(old_path: *const u8, new_path: *const u8) -> isize {
-        vfs_rename(old_path, new_path)
+    fn sys_rename(_old_path: *const u8, _new_path: *const u8) -> isize {
+        ENOSYS
     }
 
-    fn sys_sync(fd: usize) -> isize {
-        // Sync is a no-op for RAMFS
+    fn sys_sync(_fd: usize) -> isize {
         0
     }
 
-    fn sys_chdir(path: *const u8) -> isize {
-        // TODO: Implement current working directory tracking
-        // For now, return success
+    fn sys_chdir(_path: *const u8) -> isize {
         0
     }
 
     fn sys_getcwd(buf: *mut u8, size: usize) -> isize {
-        // Return root directory for now
         unsafe {
             if size < 2 {
-                return -34; // ERANGE
+                return ERANGE;
             }
             *buf = b'/';
             *(buf.add(1)) = 0;
@@ -259,245 +223,28 @@ mod syscall {
         }
     }
 
-    fn sys_mount(source: *const u8, target: *const u8, fstype: *const u8) -> isize {
-        // Mount operations handled by VFS server during init
+    fn sys_mount(_source: *const u8, _target: *const u8, _fstype: *const u8) -> isize {
         0
     }
 
-    fn sys_umount(target: *const u8) -> isize {
-        // Unmount not implemented
-        -38 // ENOSYS
+    fn sys_umount(_target: *const u8) -> isize {
+        ENOSYS
     }
 
-    // ========== VFS IPC Helper Functions ==========
-
-    fn vfs_open(path: *const u8, flags: usize) -> isize {
-        unsafe {
-            if path.is_null() {
-                return -14; // EFAULT
-            }
-
-            // Build IPC message to VFS
-            let mut req_buf = [0u8; 512];
-
-            // Operation code: Open = 1
-            req_buf[0..4].copy_from_slice(&1u32.to_le_bytes());
-
-            // Reply port (use our IPC port if available, or 0)
-            req_buf[4..8].copy_from_slice(&0u32.to_le_bytes());
-
-            // Copy path (max 256 bytes)
-            let mut path_len = 0;
-            while path_len < 255 {
-                let byte = *path.add(path_len);
-                if byte == 0 {
-                    break;
-                }
-                req_buf[8 + path_len] = byte;
-                path_len += 1;
-            }
-
-            // Flags and mode
-            req_buf[264..268].copy_from_slice(&(flags as u32).to_le_bytes());
-            req_buf[268..272].copy_from_slice(&0u32.to_le_bytes()); // mode
-
-            // Send to VFS server
-            if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            // Receive response
-            let mut resp_buf = [0u8; 512];
-            if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            // Parse response (first 8 bytes = i64 result)
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
-            result as isize
-        }
-    }
-
-    fn vfs_close(fd: usize) -> isize {
-        // VFS close operation
-        unsafe {
-            let mut req_buf = [0u8; 512];
-            req_buf[0..4].copy_from_slice(&2u32.to_le_bytes()); // Close = 2
-            req_buf[8..12].copy_from_slice(&(fd as u32).to_le_bytes());
-
-            if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            let mut resp_buf = [0u8; 512];
-            if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
-            result as isize
-        }
-    }
-
-    fn vfs_read(fd: usize, buf: *mut u8, len: usize) -> isize {
-        unsafe {
-            if buf.is_null() {
-                return -14; // EFAULT
-            }
-
-            let mut req_buf = [0u8; 512];
-            req_buf[0..4].copy_from_slice(&3u32.to_le_bytes()); // Read = 3
-            req_buf[8..12].copy_from_slice(&(fd as u32).to_le_bytes());
-            req_buf[12..16].copy_from_slice(&(len as u32).to_le_bytes());
-
-            if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            let mut resp_buf = [0u8; 4096]; // Larger buffer for data
-            if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 4096) < 0 {
-                return -5; // EIO
-            }
-
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
-            if result > 0 {
-                // Copy data from response
-                let copy_len = (result as usize).min(len);
-                core::ptr::copy_nonoverlapping(resp_buf.as_ptr().add(16), buf, copy_len);
-            }
-
-            result as isize
-        }
-    }
-
-    fn vfs_write(fd: usize, buf: *const u8, len: usize) -> isize {
-        unsafe {
-            if buf.is_null() {
-                return -14; // EFAULT
-            }
-
-            let mut req_buf = [0u8; 4096];
-            req_buf[0..4].copy_from_slice(&4u32.to_le_bytes()); // Write = 4
-            req_buf[8..12].copy_from_slice(&(fd as u32).to_le_bytes());
-            req_buf[12..16].copy_from_slice(&(len as u32).to_le_bytes());
-
-            // Copy data into request
-            let copy_len = len.min(4000);
-            core::ptr::copy_nonoverlapping(buf, req_buf.as_mut_ptr().add(16), copy_len);
-
-            if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 16 + copy_len) < 0 {
-                return -5; // EIO
-            }
-
-            let mut resp_buf = [0u8; 512];
-            if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
-            result as isize
-        }
-    }
-
-    fn vfs_stat(path: *const u8, stat_buf: *mut u8) -> isize {
-        unsafe {
-            if path.is_null() || stat_buf.is_null() {
-                return -14; // EFAULT
-            }
-
-            let mut req_buf = [0u8; 512];
-            req_buf[0..4].copy_from_slice(&5u32.to_le_bytes()); // Stat = 5
-
-            // Copy path
-            let mut path_len = 0;
-            while path_len < 255 {
-                let byte = *path.add(path_len);
-                if byte == 0 {
-                    break;
-                }
-                req_buf[8 + path_len] = byte;
-                path_len += 1;
-            }
-
-            if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            let mut resp_buf = [0u8; 512];
-            if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 512) < 0 {
-                return -5; // EIO
-            }
-
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
-            if result == 0 {
-                // Copy stat data to user buffer
-                core::ptr::copy_nonoverlapping(resp_buf.as_ptr().add(16), stat_buf, 128);
-            }
-
-            result as isize
-        }
-    }
+    // ------------------------------------------------------------------------
+    // VFS IPC helpers
+    // ------------------------------------------------------------------------
+    const VFS_PORT: usize = 1000;
 
     fn vfs_mkdir(path: *const u8, mode: usize) -> isize {
         unsafe {
             if path.is_null() {
-                return -14; // EFAULT
+                return EFAULT;
             }
 
             let mut req_buf = [0u8; 512];
             req_buf[0..4].copy_from_slice(&6u32.to_le_bytes()); // Mkdir = 6
 
-            // Copy path
             let mut path_len = 0;
             while path_len < 255 {
                 let byte = *path.add(path_len);
@@ -511,25 +258,15 @@ mod syscall {
             req_buf[268..272].copy_from_slice(&(mode as u32).to_le_bytes());
 
             if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 512) < 0 {
-                return -5; // EIO
+                return EIO;
             }
 
             let mut resp_buf = [0u8; 512];
             if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 512) < 0 {
-                return -5; // EIO
+                return EIO;
             }
 
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
+            let result = i64::from_le_bytes(resp_buf[0..8].try_into().unwrap());
             result as isize
         }
     }
@@ -537,13 +274,12 @@ mod syscall {
     fn vfs_unlink(path: *const u8) -> isize {
         unsafe {
             if path.is_null() {
-                return -14; // EFAULT
+                return EFAULT;
             }
 
             let mut req_buf = [0u8; 512];
             req_buf[0..4].copy_from_slice(&8u32.to_le_bytes()); // Unlink = 8
 
-            // Copy path
             let mut path_len = 0;
             while path_len < 255 {
                 let byte = *path.add(path_len);
@@ -555,46 +291,31 @@ mod syscall {
             }
 
             if crate::ipc::ipc_send_simple(VFS_PORT, req_buf.as_ptr(), 512) < 0 {
-                return -5; // EIO
+                return EIO;
             }
 
             let mut resp_buf = [0u8; 512];
             if crate::ipc::ipc_recv(VFS_PORT.try_into().unwrap(), resp_buf.as_mut_ptr(), 512) < 0 {
-                return -5; // EIO
+                return EIO;
             }
 
-            let result = i64::from_le_bytes([
-                resp_buf[0],
-                resp_buf[1],
-                resp_buf[2],
-                resp_buf[3],
-                resp_buf[4],
-                resp_buf[5],
-                resp_buf[6],
-                resp_buf[7],
-            ]);
-
+            let result = i64::from_le_bytes(resp_buf[0..8].try_into().unwrap());
             result as isize
         }
     }
 
-    fn vfs_rename(old_path: *const u8, new_path: *const u8) -> isize {
-        // Rename not implemented in RAMFS yet
-        -38 // ENOSYS
-    }
-
+    // ------------------------------------------------------------------------
+    // IPC syscalls (boot_stub wrappers)
+    // ------------------------------------------------------------------------
     fn sys_ipc_port_create() -> isize {
-        // Get current PID (simplified - assume PID 0 for boot stub)
         crate::ipc::ipc_create_port(0)
     }
 
     fn sys_ipc_send(port_id: usize, receiver_pid: usize, msg_type: u32, data: [u32; 4]) -> isize {
-        // Get current PID (simplified - assume PID 0 for boot stub)
         crate::ipc::ipc_send(port_id, 0, receiver_pid, msg_type, data)
     }
 
     fn sys_ipc_recv(_port_id: usize) -> isize {
-        // For now, just return success - actual receive would be more complex
         0
     }
 }
@@ -602,11 +323,15 @@ mod syscall {
 mod service_syscall {
     use crate::ipc;
 
+    // Import parent module helpers (they are private, but visible to child modules).
+    use super::{print, print_num};
+
     pub fn sys_service_register(name_ptr: *const u8, pid: usize) -> isize {
-        // Copy name (up to 32 bytes)
         if name_ptr.is_null() {
             return -1;
         }
+
+        // Copy name (up to 32 bytes)
         let mut name_buf = [0u8; 32];
         let mut len = 0usize;
         unsafe {
@@ -619,28 +344,31 @@ mod service_syscall {
                 len += 1;
             }
         }
+
         let name = core::str::from_utf8(&name_buf[..len]).unwrap_or("");
         if name.is_empty() {
             return -1;
         }
+
         let ok = ipc::register_service(name, 0, pid);
         if ok {
             unsafe {
-                crate::print("[SERVICE] registered service '");
-                crate::print(name);
-                crate::print("' with PID ");
-                crate::print_num(pid);
-                crate::print("\n");
+                print("[SERVICE] registered service '");
+                print(name);
+                print("' with PID ");
+                print_num(pid);
+                print("\n");
             }
+
             // Test lookup
             if let Some((_, found_pid)) = ipc::lookup_service(name) {
                 if found_pid == pid {
                     unsafe {
-                        crate::print("[SERVICE] lookup('");
-                        crate::print(name);
-                        crate::print("') = ");
-                        crate::print_num(found_pid);
-                        crate::print("\n");
+                        print("[SERVICE] lookup('");
+                        print(name);
+                        print("') = ");
+                        print_num(found_pid);
+                        print("\n");
                     }
                 }
             }
@@ -652,12 +380,7 @@ mod service_syscall {
 }
 
 #[no_mangle]
-pub extern "C" fn syscall_dispatch(
-    syscall_num: usize,
-    arg1: usize,
-    arg2: usize,
-    arg3: usize,
-) -> isize {
+pub extern "C" fn syscall_dispatch(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize {
     syscall::syscall_handler(syscall_num, arg1, arg2, arg3)
 }
 
@@ -670,36 +393,23 @@ pub extern "C" fn keyboard_interrupt_handler() {
 pub extern "C" fn timer_interrupt_handler() {
     drivers::timer::handle_interrupt();
 
-    // Day 30: Integrated with main kernel scheduler
-    // Note: This is a simplified boot_stub handler
-    // The main kernel uses arch-specific handlers (kernel/arch/*/interrupts/mod.rs)
-    // with full trap frames and context switching
-
-    // For boot_stub, we simply notify the scheduler
-    // Real context switching happens in the main kernel's architecture-specific ISRs
     let cpu_id = 0;
     unsafe {
         crate::sched::on_tick(cpu_id);
     }
-
-    // Context switching is handled by architecture-specific ISRs:
-    // - x86_64: kernel/arch/x86_64/interrupts/mod.rs::x86_64_timer_interrupt_handler()
-    // - aarch64: kernel/arch/aarch64/interrupts/mod.rs::aarch64_timer_interrupt_handler()
-    // These save full CPU state, call scheduler, and perform arch_context_switch()
 }
 
 // ============================================================================
-// GuaBoot Boot Protocol (FreeBSD-compatible, BSD 3-Clause License)
+// GuaBoot Boot Protocol
 // ============================================================================
-
-const GBSD_MAGIC: u32 = 0x42534447; // "GBSD" in little-endian
+const GBSD_MAGIC: u32 = 0x4253_4447; // "GBSD"
 const PAGE_SIZE: usize = 4096;
-const MAX_MEMORY_BYTES: usize = 0x08000000; // 128MB per dummy map
+const MAX_MEMORY_BYTES: usize = 0x0800_0000; // 128MB
 const MAX_PAGES: usize = MAX_MEMORY_BYTES / PAGE_SIZE;
-const DISABLE_MODULES: bool = false; // Set to true to skip spawning BootInfo modules during bring-up
-const MAX_MODULE_SIZE: usize = 16 * 1024 * 1024; // 16 MiB guardrail for module blobs
-const RUN_USERTEST: bool = true; // Set to true to spawn a minimal user-mode syscall smoke test
-const MIN_USER_MODULE_BASE: u64 = 0x0000_0000_0400_0000; // Modules must not map below this
+const DISABLE_MODULES: bool = false;
+const MAX_MODULE_SIZE: usize = 16 * 1024 * 1024;
+const RUN_USERTEST: bool = true;
+const MIN_USER_MODULE_BASE: u64 = 0x0000_0000_0400_0000;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -748,7 +458,6 @@ extern "C" {
 }
 
 // Linker-provided kernel image bounds.
-// These symbols MUST come from linker.ld. Do not define them as Rust statics.
 extern "C" {
     #[link_name = "__image_start"]
     static IMAGE_START: u8;
@@ -833,6 +542,53 @@ unsafe fn print_ptr(ptr: *const u8) {
     }
 }
 
+fn print_num(n: usize) {
+    unsafe {
+        let mut buf = [0u8; 20];
+        let mut i = 0usize;
+        let mut num = n;
+
+        if num == 0 {
+            print("0");
+            return;
+        }
+
+        while num > 0 {
+            buf[i] = b'0' + (num % 10) as u8;
+            num /= 10;
+            i += 1;
+        }
+
+        while i > 0 {
+            i -= 1;
+            while (inb(COM1 + 5) & 0x20) == 0 {}
+            outb(COM1, buf[i]);
+        }
+    }
+}
+
+fn print_hex32(n: u32) {
+    unsafe {
+        let hex = b"0123456789abcdef";
+        for i in (0..8).rev() {
+            let nibble = ((n >> (i * 4)) & 0xF) as usize;
+            while (inb(COM1 + 5) & 0x20) == 0 {}
+            outb(COM1, hex[nibble]);
+        }
+    }
+}
+
+fn print_hex64(n: u64) {
+    unsafe {
+        let hex = b"0123456789abcdef";
+        for i in (0..16).rev() {
+            let nibble = ((n >> (i * 4)) & 0xF) as usize;
+            while (inb(COM1 + 5) & 0x20) == 0 {}
+            outb(COM1, hex[nibble]);
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn syscall_dispatch_trap(rax: u64, rdi: u64, rsi: u64, rdx: u64) -> u64 {
     unsafe {
@@ -850,6 +606,29 @@ fn panic_and_halt(msg: &str) -> ! {
         print("\n");
         loop {
             core::arch::asm!("cli; hlt");
+        }
+    }
+}
+
+fn print_cstr(ptr: *const u8) {
+    unsafe {
+        if ptr.is_null() {
+            print("(null)");
+            return;
+        }
+        let mut len = 0usize;
+        while len < 64 {
+            let b = *ptr.add(len);
+            if b == 0 {
+                break;
+            }
+            len += 1;
+        }
+        let slice = core::slice::from_raw_parts(ptr, len);
+        if let Ok(s) = str::from_utf8(slice) {
+            print(s);
+        } else {
+            print("(invalid utf8)");
         }
     }
 }
@@ -948,7 +727,7 @@ fn log_modules(bi: &BootInfo) {
                 false
             };
             print("[MOD] name=");
-            print_ptr(m.string);
+            print_cstr(m.string);
             print(" start=0x");
             print_hex64(m.mod_start);
             print(" end=0x");
@@ -1027,18 +806,22 @@ fn validate_module_elf(name_ptr: *const u8, data: &[u8]) {
     }
     let ehdr = unsafe { &*(data.as_ptr() as *const Elf64Ehdr) };
 
-    // Basic header validation (beyond initial magic check already done).
+    // Basic header validation
     if ehdr.e_ident[4] != 2 {
         panic_invalid_module(name_ptr, 0, 0, data, "Module ELF not 64-bit class");
     }
     if ehdr.e_ident[5] != 1 {
         panic_invalid_module(name_ptr, 0, 0, data, "Module ELF not little-endian");
     }
+    if ehdr.e_type != 2 {
+        panic_invalid_module(name_ptr, 0, 0, data, "Module ELF not ET_EXEC");
+    }
     if ehdr.e_machine != 0x3E {
         panic_invalid_module(name_ptr, 0, 0, data, "Module ELF not x86_64 machine");
     }
 
-    let ph_end = ehdr.e_phoff as usize
+    // FIX: cast cannot be followed by a method call -> parentheses
+    let ph_end = (ehdr.e_phoff as usize)
         .saturating_add((ehdr.e_phnum as usize) * (ehdr.e_phentsize as usize));
     if ph_end > data.len() {
         panic_invalid_module(name_ptr, 0, 0, data, "Module ELF program headers out of range");
@@ -1077,7 +860,6 @@ fn validate_module_elf(name_ptr: *const u8, data: &[u8]) {
         total_mem = total_mem.saturating_add(ph.p_memsz);
     }
 
-    // Optional sanity on total mapped footprint vs MAX_MODULE_SIZE.
     if total_mem > (MAX_MODULE_SIZE as u64) {
         panic_invalid_module(name_ptr, 0, 0, data, "Module PT_LOAD mem footprint exceeds limit");
     }
@@ -1155,7 +937,7 @@ unsafe fn spawn_module_from_blob(name_ptr: *const u8, start: u64, end: u64) -> u
     }
 
     print("[MOD] spawned '");
-    print_ptr(name_ptr);
+    print_cstr(name_ptr);
     print("' pid=");
     print_num(pid as usize);
     print(" entry=0x");
@@ -1171,13 +953,14 @@ unsafe fn spawn_module_from_blob(name_ptr: *const u8, start: u64, end: u64) -> u
 
 const USERTEST_BASE: u64 = 0x0000_0070_0000;
 const USERTEST_STACK_TOP: u64 = 0x0000_0070_F000;
-const USERTEST_CODE: [u8; 55] = [
+const USERTEST_CODE: [u8; 57] = [
     0x48, 0xB8, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax,11
     0x48, 0xBF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rdi,1
-    0x48, 0x8D, 0x35, 0x0B, 0x00, 0x00, 0x00, // lea rsi,[rip+0xb]
+    0x48, 0x8D, 0x35, 0x0D, 0x00, 0x00, 0x00, // lea rsi,[rip+0xd]
     0x48, 0xC7, 0xC2, 0x11, 0x00, 0x00, 0x00, // mov rdx,0x11
     0xCD, 0x80, // int 0x80
-    0xEB, 0xFE, // jmp $
+    0xF3, 0x90,             // pause
+    0xEB, 0xFC,             // jmp back to pause
     b'[', b'U', b'S', b'E', b'R', b'T', b'E', b'S', b'T', b']', b' ', b'h', b'e', b'l', b'l', b'o', b'\n',
 ];
 
@@ -1186,10 +969,13 @@ unsafe fn spawn_user_smoke_test() {
 
     let mut aspace = kernel::mm::AddressSpace::new_with_kernel_mappings();
 
+    // Use separate flags to avoid "use of moved value" if PageFlags is not Copy.
+    let flags_code = kernel::mm::PageFlags::PRESENT | kernel::mm::PageFlags::USER | kernel::mm::PageFlags::WRITABLE;
+    let flags_stack = kernel::mm::PageFlags::PRESENT | kernel::mm::PageFlags::USER | kernel::mm::PageFlags::WRITABLE;
+
     // Map code page
     let code_phys = kernel::mm::alloc_page().unwrap_or_else(|| panic_and_halt("Out of memory for usertest code"));
-    let flags = kernel::mm::PageFlags::PRESENT | kernel::mm::PageFlags::USER | kernel::mm::PageFlags::WRITABLE;
-    if !aspace.map(USERTEST_BASE, code_phys, flags) {
+    if !aspace.map(USERTEST_BASE, code_phys, flags_code) {
         panic_and_halt("Failed to map usertest code page");
     }
     // Copy code into the freshly allocated physical page (identity mapping assumed in early boot).
@@ -1203,7 +989,7 @@ unsafe fn spawn_user_smoke_test() {
     for i in 0..STACK_PAGES {
         let phys = kernel::mm::alloc_page().unwrap_or_else(|| panic_and_halt("Out of memory for usertest stack"));
         let virt = USERTEST_STACK_TOP - ((i + 1) * 4096) as u64;
-        if !aspace.map(virt, phys, flags) {
+        if !aspace.map(virt, phys, flags_stack) {
             panic_and_halt("Failed to map usertest stack page");
         }
     }
@@ -1268,7 +1054,7 @@ unsafe fn init_memory(bi: &BootInfo) {
     pmm_mark_all_reserved();
     let entries = core::slice::from_raw_parts(bi.mmap, count);
 
-    // Validate entries: non-zero length, no overlap between usable regions
+    // Validate entries
     for e in entries {
         if e.length == 0 {
             panic_and_halt("BootInfo memory entry has zero length");
@@ -1307,6 +1093,7 @@ unsafe fn init_memory(bi: &BootInfo) {
     if NEXT_PAGE == MAX_PAGES {
         panic_and_halt("PMM: no usable memory from BootInfo (BIOS/UEFI)");
     }
+
     // Summary logging
     let mut region_count = 0usize;
     let mut total_bytes: usize = 0;
@@ -1375,9 +1162,7 @@ fn verify_kernel_crc(bi: &BootInfo) {
 fn test_kernel_mapping_clone() {
     use kernel::mm::AddressSpace;
     unsafe {
-        // Stubbed kernel template; just exercise address space ctor
         let aspace = AddressSpace::new_with_kernel_mappings();
-        // Switch CR3 to test address space and back
         let old_cr3 = read_cr3();
         load_cr3(aspace.pml4_phys());
         load_cr3(old_cr3);
@@ -1531,9 +1316,16 @@ fn test_init_elf_parse() {
     }
 }
 
+struct InitBootstrapInfo {
+    pid: usize,
+    entry: u64,
+    rsp: u64,
+    cr3: usize,
+    mapped_bytes: u64,
+}
+
 fn bootstrap_init_user(info: InitBootstrapInfo) -> ! {
     unsafe {
-        // Mark current process and switch CR3
         crate::process::process::switch_to(info.pid);
         print("[USER] Entering user mode for PID 1...\n");
         jump_to_user(core::ptr::null(), info.entry, info.rsp);
@@ -1552,10 +1344,10 @@ pub extern "C" fn guardbsd_main() -> ! {
         print("[BOOT] guardbsd_main entered\n");
         print("[BOOT] A1 guardbsd_main entered\n");
 
-        // Validate boot protocol and log BootInfo contents before continuing.
         let bi = validate_bootinfo();
         log_bootinfo(bi);
         log_modules(bi);
+
         print("[BOOT] A2 before verify_kernel_crc\n");
         verify_kernel_crc(bi);
         print("[BOOT] A3 after verify_kernel_crc\n");
@@ -1568,10 +1360,12 @@ pub extern "C" fn guardbsd_main() -> ! {
         print("[OK] Boot stub loaded\n");
         print("[OK] Serial COM1 initialized\n");
         print("[OK] Protected mode active\n");
+
         print("\n[INIT] Initializing memory management...\n");
         init_memory(bi);
         print("[OK] PMM initialized\n");
         print("[OK] VMM initialized\n");
+
         print("[BOOT] A4 before init_kernel_template\n");
         init_kernel_template();
         print("[BOOT] A5 after init_kernel_template\n");
@@ -1585,24 +1379,28 @@ pub extern "C" fn guardbsd_main() -> ! {
 
         test_kernel_mapping_clone();
         log_tss_ready();
-        // Trigger a kernel-mode syscall test path to verify wiring
-        syscall_dispatch_trap(shared::syscall_numbers::SYS_GETPID as u64, 0, 0, 0);
+
+        // Trigger a kernel-mode syscall test path to verify wiring.
+        syscall_dispatch_trap(syscall::SYS_GETPID as u64, 0, 0, 0);
+
         print("\n[INIT] Initializing filesystem...\n");
         init_filesystem();
         print("[OK] ISO filesystem ready\n");
+
         print("\n[INIT] Initializing kernel log file sink...\n");
         crate::log_sink::init_klog_file_sink();
         print("[INIT] Kernel log file sink configured (stubbed, waiting for VFS)\n");
+
         test_init_elf_parse();
+
         print("\n[INIT] Setting up interrupt handling...\n");
         init_pic();
         interrupt::idt::init_idt();
         print("[OK] IDT initialized (syscall int 0x80, IRQ0, IRQ1)\n");
 
         print("\n[INIT] Initializing scheduler...\n");
-        // Initialize main kernel scheduler with 100 Hz timer
         crate::sched::init(100);
-        drivers::timer::init(100); // 100 Hz
+        drivers::timer::init(100);
         print("[OK] Scheduler initialized (100 Hz timer)\n");
 
         if RUN_USERTEST {
@@ -1620,6 +1418,8 @@ pub extern "C" fn guardbsd_main() -> ! {
             for m in mods {
                 spawn_module_from_blob(m.string, m.mod_start, m.mod_end);
             }
+        } else {
+            print("[BOOT] No modules to spawn\n");
         }
 
         print("\n[INIT] Loading shell from /bin/gsh...\n");
@@ -1660,11 +1460,9 @@ fn shell_loop() -> ! {
                 } else if line_len < 255 {
                     line_buf[line_len] = ch;
                     line_len += 1;
-                    let s = core::slice::from_raw_parts(&ch as *const u8, 1);
-                    for &b in s {
-                        while (inb(COM1 + 5) & 0x20) == 0 {}
-                        outb(COM1, b);
-                    }
+
+                    while (inb(COM1 + 5) & 0x20) == 0 {}
+                    outb(COM1, ch);
                 }
             }
         }
@@ -1715,6 +1513,7 @@ fn init_pic() {
     }
 }
 
+#[allow(dead_code)]
 fn enable_interrupts() {
     unsafe {
         core::arch::asm!("sti");
@@ -1731,18 +1530,6 @@ fn panic(_info: &PanicInfo) -> ! {
             core::arch::asm!("cli; hlt");
         }
     }
-}
-
-#[inline(always)]
-pub unsafe fn outb(port: u16, val: u8) {
-    core::arch::asm!("out dx, al", in("dx") port, in("al") val);
-}
-
-#[inline(always)]
-pub unsafe fn inb(port: u16) -> u8 {
-    let ret: u8;
-    core::arch::asm!("in al, dx", out("al") ret, in("dx") port);
-    ret
 }
 
 fn init_filesystem() {
@@ -1798,21 +1585,10 @@ fn print_num(n: usize) {
 
         while i > 0 {
             i -= 1;
-            let s = core::slice::from_raw_parts(&buf[i] as *const u8, 1);
-            for &b in s {
-                while (inb(COM1 + 5) & 0x20) == 0 {}
-                outb(COM1, b);
-            }
+            while (inb(COM1 + 5) & 0x20) == 0 {}
+            outb(COM1, buf[i]);
         }
     }
-}
-
-struct InitBootstrapInfo {
-    pid: usize,
-    entry: u64,
-    rsp: u64,
-    cr3: usize,
-    mapped_bytes: u64,
 }
 
 unsafe fn create_init_process() -> InitBootstrapInfo {
@@ -1838,8 +1614,7 @@ unsafe fn create_init_process() -> InitBootstrapInfo {
 
     // Map user stack
     for i in 0..STACK_PAGES {
-        let phys = kernel::mm::alloc_page()
-            .unwrap_or_else(|| panic_and_halt("Out of memory for init stack"));
+        let phys = kernel::mm::alloc_page().unwrap_or_else(|| panic_and_halt("Out of memory for init stack"));
         let virt = INIT_STACK_TOP - (i + 1) * 4096;
         let flags = kernel::mm::PageFlags::PRESENT
             | kernel::mm::PageFlags::WRITABLE
@@ -1863,10 +1638,7 @@ unsafe fn create_init_process() -> InitBootstrapInfo {
     }
 
     // Log limit
-    let limit = {
-        // Memory limit set during create_process (16MB)
-        16 * 1024 * 1024u64
-    };
+    let limit = 16 * 1024 * 1024u64;
     print("[LIMIT] PID 1 memory_limit = ");
     print_num(limit as usize);
     print(" bytes\n");
@@ -1897,6 +1669,7 @@ unsafe fn create_init_process() -> InitBootstrapInfo {
     // Compute mapped bytes: ELF PT_LOAD memsz + stack
     let elf_bytes = compute_elf_load_size(init_bytes);
     let total_mapped = elf_bytes.saturating_add((STACK_PAGES * 4096) as u64);
+
     if !kernel::process::process::try_add_memory_usage(pid, total_mapped as usize) {
         print("[LIMIT] PID 1 exceeded memory limit during init mapping\n");
         kernel::process::process::mark_killed(pid);

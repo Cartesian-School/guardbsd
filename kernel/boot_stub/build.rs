@@ -41,6 +41,9 @@ fn main() {
 fn compile_asm(out_dir: &Path, src: &str, name: &str) -> PathBuf {
     let path = Path::new(src);
     let mut build = cc::Build::new();
+    if env::var("DEBUG_HANDOFF").is_ok() {
+        build.define("DEBUG_HANDOFF", None);
+    }
     build
         .cargo_metadata(false)
         .file(path)

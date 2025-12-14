@@ -14,6 +14,9 @@
 #define COM1 0x3F8
 #define GBSD_MAGIC 0x42534447
 #define BOOTINFO_PTR_SLOT ((uint64_t*)0x7010)
+#ifdef DEBUG_HANDOFF
+#define HANDOFF_ADDR ((volatile uint32_t*)0x9F000)
+#endif
 
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ volatile("outb %0, %1" : : "a"(val), "Nd"(port));
@@ -193,14 +196,7 @@ static uint32_t crc32_calc(const uint8_t *data, uint32_t len) {
 }
 
 static inline void debug_e9(char ch) {
-    __asm__ volatile (
-        "push %%ax\n"
-        "movb %0, %%al\n"
-        "out  $0xE9, %%al\n"
-        "pop  %%ax\n"
-        :
-        : "r"(ch)
-        : "al");
+    outb(0xE9, (uint8_t)ch);
 }
 
 static void build_bootinfo(void) {
@@ -518,6 +514,19 @@ void loader_main(void) {
     puts("[LOADER] Enabling long mode and jumping to kernel at 0x");
     put_hex_static((uint32_t)(uintptr_t)entry_point);
     puts("\n");
+
+#ifdef DEBUG_HANDOFF
+    puts("[HANDOFF] Probing stamp at 0x0009F000 before jump: 0x");
+    *HANDOFF_ADDR = 0;
+    put_hex_static(*HANDOFF_ADDR);
+    puts("\n");
+    for (volatile uint32_t i = 0; i < 500000; i++) {
+        __asm__ volatile("pause");
+    }
+    puts("[HANDOFF] After short delay (pre-jump): 0x");
+    put_hex_static(*HANDOFF_ADDR);
+    puts("\n");
+#endif
 
     // Build identity paging and enter long mode
     setup_identity_paging();
