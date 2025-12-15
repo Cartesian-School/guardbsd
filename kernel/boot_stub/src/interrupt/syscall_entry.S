@@ -1,27 +1,21 @@
 /* kernel/boot_stub/src/interrupt/syscall_entry.S
  *
- * x86_64 INT 0x80 syscall entry stub for boot_stub.
+ * int 0x80 syscall entry for x86_64 boot_stub.
  *
- * Calling convention (user -> kernel):
- *   RAX = syscall number
- *   RDI = arg1
- *   RSI = arg2
- *   RDX = arg3
+ * User ABI (as assumed by your usertest and Rust dispatcher):
+ *   rax = syscall number
+ *   rdi = arg1
+ *   rsi = arg2
+ *   rdx = arg3
  *
- * We call Rust:
- *   syscall_dispatch(syscall_num: usize, arg1: usize, arg2: usize, arg3: usize) -> isize
+ * Kernel ABI to Rust:
+ *   syscall_dispatch(syscall_num, arg1, arg2, arg3) -> isize
+ *   args in: rdi, rsi, rdx, rcx
+ *   return:  rax
  *
- * System V ABI args:
- *   RDI, RSI, RDX, RCX
- *
- * Return:
- *   RAX = isize (syscall return)
- *
- * Implementation detail:
- * - We push a full GPR save set INCLUDING RAX.
- * - After call, we overwrite the saved RAX slot on stack with the return value.
- * - Then we restore registers strictly in reverse push order, ending with popq %rax,
- *   which loads the syscall return value into RAX.
+ * IMPORTANT FIX:
+ * - We do NOT push the original RAX, because RAX must return syscall result.
+ * - Therefore there is no "skip RAX" and no restore-order trap.
  */
 
 .code64
@@ -30,21 +24,17 @@
 
 .global syscall_entry
 .type syscall_entry, @function
+
+.extern syscall_dispatch
+
 syscall_entry:
     cld
 
-    /* Preserve incoming syscall args in temporaries (before we start pushing). */
-    movq %rax, %r10    /* sysno */
-    movq %rdi, %r11    /* arg1  */
-    movq %rsi, %r12    /* arg2  */
-    movq %rdx, %r13    /* arg3  */
-
-    /* Save all GPRs (push order matters; restore will be exact reverse). */
-    pushq %rax
+    /* Save all regs EXCEPT RAX (RAX holds return value) */
+    pushq %rbp
     pushq %rbx
     pushq %rcx
     pushq %rdx
-    pushq %rbp
     pushq %rsi
     pushq %rdi
     pushq %r8
@@ -56,26 +46,42 @@ syscall_entry:
     pushq %r14
     pushq %r15
 
-    /* Map to SysV ABI for syscall_dispatch(sysno, arg1, arg2, arg3). */
-    movq %r10, %rdi    /* syscall_num */
-    movq %r11, %rsi    /* arg1 */
-    movq %r12, %rdx    /* arg2 */
-    movq %r13, %rcx    /* arg3 */
+    /* Save current stack pointer across the call in a callee-saved register */
+    movq %rsp, %r15
 
-    call syscall_dispatch
-    /* Return value now in RAX. */
+    /* Align stack for System V ABI call */
+    andq $-16, %rsp
 
-    /* -----------------------------------------------------------------
-     * Overwrite saved original RAX on the stack with the syscall return.
+    /* Marshal args for syscall_dispatch(sysnum,arg1,arg2,arg3):
+     * original rdi/rsi/rdx were saved on stack at known offsets from r15
      *
-     * Stack layout after 15 pushes:
-     *   [rsp + 0]   = saved r15
-     *   ...
-     *   [rsp + 14*8]= saved rax   <-- overwrite this slot
-     * ----------------------------------------------------------------- */
-    movq %rax, 112(%rsp)            /* 14*8 = 112 */
+     * Stack layout at r15 (top):
+     *   0  r15
+     *   8  r14
+     *   16 r13
+     *   24 r12
+     *   32 r11
+     *   40 r10
+     *   48 r9
+     *   56 r8
+     *   64 rdi (arg1)
+     *   72 rsi (arg2)
+     *   80 rdx (arg3)
+     *   88 rcx (saved)
+     *   96 rbx
+     *   104 rbp
+     */
+    movq 64(%r15), %rsi     /* arg1 */
+    movq 72(%r15), %rdx     /* arg2 */
+    movq 80(%r15), %rcx     /* arg3 */
+    movq %rax, %rdi         /* syscall_num */
 
-    /* Restore registers strictly in reverse order (standard). */
+    call syscall_dispatch    /* rax = isize result */
+
+    /* Restore original stack pointer */
+    movq %r15, %rsp
+
+    /* Restore regs */
     popq %r15
     popq %r14
     popq %r13
@@ -86,11 +92,10 @@ syscall_entry:
     popq %r8
     popq %rdi
     popq %rsi
-    popq %rbp
     popq %rdx
     popq %rcx
     popq %rbx
-    popq %rax                        /* loads syscall return value */
+    popq %rbp
 
     iretq
 

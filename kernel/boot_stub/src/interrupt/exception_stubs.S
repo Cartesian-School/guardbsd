@@ -1,17 +1,13 @@
 /* kernel/boot_stub/src/interrupt/exception_stubs.S
  *
- * Project: GuardBSD Winter Saga version 1.0.0
- * Package: boot_stub
- * Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
- *  License: BSD-3-Clause
- *
  * Minimal x86_64 exception stubs for boot_stub IDT (vectors 0..31).
  *
- * Convention:
- * - write_char_bl expects character in BL (explicit, unambiguous).
- * - exc_stub_N pushes vector number and jumps to common_exception_handler.
+ * Design:
+ * - Each exc_stub_N pushes vector number and jumps to common_exception_handler.
+ * - common_exception_handler prints diagnostics to COM1 and halts forever.
  *
- * Handler additionally supports CPL change (user->kernel) and prints old_rsp/old_ss.
+ * Calling convention for helpers:
+ * - write_char_bl: character MUST be in BL.
  */
 
 .code64
@@ -28,16 +24,15 @@ write_char_bl:
     /* BL = char */
     push %rax
     push %rdx
-1:
-    movw $(COM1 + 5), %dx           /* LSR */
+1:  movw $(COM1 + 5), %dx           /* LSR */
     inb  %dx, %al
     testb $0x20, %al                /* THR empty */
     jz   1b
     movw $COM1, %dx
-    mov  %bl, %al
+    mov %bl, %al
     outb %al, %dx
-    pop  %rdx
-    pop  %rax
+    pop %rdx
+    pop %rax
     ret
 
 write_str:
@@ -72,7 +67,7 @@ write_hex64:
     mov %rdi, %rax
     shr %cl, %rax
     and $0xF, %rax
-    movzbq (%rsi,%rax,1), %rbx      /* BL = digit */
+    movzbq (%rsi,%rax,1), %rbx
     call write_char_bl
     sub $4, %ecx
     jns 1b
@@ -86,13 +81,15 @@ write_hex64:
 
 write_hex16:
     /* DI = value, prints 4 hex digits */
+    push %rdi
+    shl $48, %rdi
+    shr $48, %rdi
+
     push %rax
     push %rbx
     push %rcx
     push %rdx
     push %rsi
-    push %rdi
-
     lea hex_digits(%rip), %rsi
     mov $12, %ecx
 1:
@@ -104,12 +101,12 @@ write_hex16:
     sub $4, %ecx
     jns 1b
 
-    pop %rdi
     pop %rsi
     pop %rdx
     pop %rcx
     pop %rbx
     pop %rax
+    pop %rdi
     ret
 
 write_nl:
@@ -129,10 +126,10 @@ common_exception_handler:
     cli
     cld
 
-    /* r12 = frame base (points to VEC pushed by stub) */
+    /* r12 = original frame pointer (points to VEC) */
     mov %rsp, %r12
 
-    /* Save volatile regs (we won't return, but keep output stable) */
+    /* Save some regs for stable printing (we never return) */
     push %rax
     push %rbx
     push %rcx
@@ -148,17 +145,16 @@ common_exception_handler:
     push %r14
     push %r15
 
-    /* vec */
+    /* vec in r13 */
     movq 0(%r12), %r13
 
-    /* Detect has_err by probing CS positions. */
-    movq 16(%r12), %rax             /* maybe CS (noerr) */
-    movq 24(%r12), %rbx             /* maybe CS (err) */
+    /* Determine layout (error-code vs no-error) by checking likely CS location */
+    movq 16(%r12), %rax
+    movq 24(%r12), %rbx
     movw %ax, %ax
     movw %bx, %bx
 
-    mov $0, %r14d                   /* r14d = has_err */
-
+    mov $0, %r14d      /* has_err = 0 */
     cmpw $0x08, %ax
     je  .Lnoerr
     cmpw $0x1B, %ax
@@ -177,15 +173,15 @@ common_exception_handler:
     mov $0, %r14d
 
 .Llayout_done:
-    /* Extract err/rip/cs/rflags */
+    /* Extract: r15=err, r11=rip, r10=cs, r9=rflags, r8=cr2 */
     cmp $0, %r14d
     je  .Lextract_noerr
 
 .Lextract_err:
-    movq 8(%r12),  %r15             /* err */
-    movq 16(%r12), %r11             /* rip */
-    movq 24(%r12), %r10             /* cs */
-    movq 32(%r12), %r9              /* rflags */
+    movq 8(%r12),  %r15             /* error */
+    movq 16(%r12), %r11             /* RIP */
+    movq 24(%r12), %r10             /* CS */
+    movq 32(%r12), %r9              /* RFLAGS */
     jmp .Lextract_done
 
 .Lextract_noerr:
@@ -195,36 +191,9 @@ common_exception_handler:
     movq 24(%r12), %r9
 
 .Lextract_done:
-    mov %cr2, %r8                   /* cr2 */
+    mov %cr2, %r8
 
-    /* from_user? (CS == 0x1B) */
-    xor %rbx, %rbx                  /* rbx = 0/1 flag */
-    cmpw $0x1B, %r10w
-    jne .Lno_user
-    mov $1, %rbx
-.Lno_user:
-
-    /* old_rsp/old_ss if from_user, else 0 */
-    xor %rax, %rax                  /* old_rsp */
-    xor %rcx, %rcx                  /* old_ss */
-    cmp $0, %rbx
-    je  .Luser_done
-
-    cmp $0, %r14d
-    je  .Luser_noerr
-
-.Luser_err:
-    movq 40(%r12), %rax             /* old_rsp */
-    movq 48(%r12), %rcx             /* old_ss */
-    jmp .Luser_done
-
-.Luser_noerr:
-    movq 32(%r12), %rax
-    movq 40(%r12), %rcx
-
-.Luser_done:
-
-    /* Print */
+    /* Print header */
     lea msg_exc(%rip), %rsi
     call write_str
 
@@ -263,20 +232,34 @@ common_exception_handler:
     mov %r8, %rdi
     call write_hex64
 
-    cmp $0, %rbx
-    je  .Lprint_done
+    /* If exception came from user mode (CS=0x1B), also print old RSP/SS */
+    movw %r10w, %ax
+    cmpw $0x1B, %ax
+    jne .Ldone_user
 
-    lea msg_old_rsp(%rip), %rsi
+    lea msg_oldrsp(%rip), %rsi
     call write_str
-    mov %rax, %rdi
+
+    cmp $0, %r14d
+    je  .Luser_noerr
+.Luser_err:
+    movq 40(%r12), %rdi             /* old RSP */
     call write_hex64
-
-    lea msg_old_ss(%rip), %rsi
+    lea msg_oldss(%rip), %rsi
     call write_str
-    mov %rcx, %rdi
+    movq 48(%r12), %rdi             /* old SS */
+    call write_hex16
+    jmp .Ldone_user
+
+.Luser_noerr:
+    movq 32(%r12), %rdi             /* old RSP */
+    call write_hex64
+    lea msg_oldss(%rip), %rsi
+    call write_str
+    movq 40(%r12), %rdi             /* old SS */
     call write_hex16
 
-.Lprint_done:
+.Ldone_user:
     call write_nl
 
 .Lhalt:
@@ -333,14 +316,16 @@ EXC_STUB 31
 
 .section .rodata
 .align 8
-hex_digits:     .ascii "0123456789abcdef"
-msg_exc:        .asciz "[EXC]"
-msg_vec:        .asciz " vec=0x"
-msg_err:        .asciz " err=0x"
-msg_rip:        .asciz " rip=0x"
-msg_cs:         .asciz " cs=0x"
-msg_rflags:     .asciz " rflags=0x"
-msg_rsp:        .asciz " rsp=0x"
-msg_cr2:        .asciz " cr2=0x"
-msg_old_rsp:    .asciz " old_rsp=0x"
-msg_old_ss:     .asciz " old_ss=0x"
+hex_digits:
+    .ascii "0123456789abcdef"
+
+msg_exc:     .asciz "[EXC]"
+msg_vec:     .asciz " vec=0x"
+msg_err:     .asciz " err=0x"
+msg_rip:     .asciz " rip=0x"
+msg_cs:      .asciz " cs=0x"
+msg_rflags:  .asciz " rflags=0x"
+msg_rsp:     .asciz " rsp=0x"
+msg_cr2:     .asciz " cr2=0x"
+msg_oldrsp:  .asciz " old_rsp=0x"
+msg_oldss:   .asciz " old_ss=0x"

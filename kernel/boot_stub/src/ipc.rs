@@ -1,12 +1,12 @@
 //! kernel/boot_stub/src/ipc.rs
 //! Project: GuardBSD Winter Saga version 1.0.0
 //! Package: boot_stub
-//! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
+//! Copyright © 2025 Cartesian School.
 //! License: BSD-3-Clause
 //!
 //! IPC infrastructure for boot stub (simple ports + message ring).
 //!
-//! This version adds an optional IRQ-safe spinlock:
+//! This version adds an IRQ-safe spinlock:
 //! - On x86_64: lock() disables interrupts (CLI) and restores previous IF on unlock.
 //! - On other arch: interrupts are not touched, but mutual exclusion still holds.
 //!
@@ -34,18 +34,25 @@ const EPIPE: isize = -32;
 // ============================================================================
 // IRQ-safe SpinLock (x86_64)
 // ============================================================================
+//
+// IMPORTANT:
+// - Do NOT lie to the compiler with `nomem`/`preserves_flags` here.
+//   `pushfq/pop` touches stack memory, and `cli/sti` modify flags.
+//
 
 #[inline(always)]
 #[cfg(target_arch = "x86_64")]
 unsafe fn irq_save_disable() -> u64 {
     let rflags: u64;
+    // Reads current RFLAGS into a GP register (touches stack).
     core::arch::asm!(
         "pushfq",
         "pop {}",
         out(reg) rflags,
-        options(nomem, preserves_flags)
+        // no options: this uses stack memory and affects compiler assumptions
     );
-    core::arch::asm!("cli", options(nomem, preserves_flags));
+    // Disable interrupts (modifies IF flag).
+    core::arch::asm!("cli");
     rflags
 }
 
@@ -55,7 +62,7 @@ unsafe fn irq_restore(saved_rflags: u64) {
     // IF is bit 9 in RFLAGS.
     const IF_MASK: u64 = 1 << 9;
     if (saved_rflags & IF_MASK) != 0 {
-        core::arch::asm!("sti", options(nomem, preserves_flags));
+        core::arch::asm!("sti");
     }
 }
 
@@ -89,13 +96,14 @@ impl<T> SpinLock<T> {
         }
     }
 
+    /// Acquire the lock.
+    ///
+    /// On x86_64 this disables IRQs before spinning to avoid same-CPU
+    /// interrupt reentrancy deadlocks.
     #[inline(always)]
     pub fn lock(&self) -> SpinLockGuard<'_, T> {
-        // IRQ-safe critical section on x86_64: disable interrupts BEFORE spinning,
-        // to prevent same-CPU interrupt reentrancy deadlocks.
         let saved = unsafe { irq_save_disable() };
 
-        // Spin until we acquire the lock.
         while self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -129,6 +137,8 @@ impl<T> core::ops::DerefMut for SpinLockGuard<'_, T> {
 impl<T> Drop for SpinLockGuard<'_, T> {
     #[inline(always)]
     fn drop(&mut self) {
+        // Release lock first, then restore IRQ state.
+        // This prevents an interrupt from re-entering and seeing the lock still held.
         self.lock.locked.store(false, Ordering::Release);
         unsafe { irq_restore(self.saved_rflags) };
     }
@@ -216,8 +226,9 @@ pub struct IpcManager {
 impl IpcManager {
     /// Const constructor: no unsafe required.
     pub const fn new() -> Self {
+        // `MaybeUninit<T>` is fine to repeat in const arrays.
         Self {
-            ports: [const { MaybeUninit::<Port>::uninit() }; MAX_PORTS],
+            ports: [MaybeUninit::<Port>::uninit(); MAX_PORTS],
             used: [false; MAX_PORTS],
             next_port_id: 1, // port 0 reserved
         }
@@ -229,7 +240,6 @@ impl IpcManager {
     }
 
     pub fn create_port(&mut self, owner_pid: usize) -> Option<usize> {
-        // Find a free slot. Prefer monotonically increasing IDs but fall back to scan.
         let mut start = self.next_port_id;
         if start == 0 {
             start = 1;
@@ -245,6 +255,7 @@ impl IpcManager {
             if start >= MAX_PORTS {
                 start = 1;
             }
+
             if !self.used[id] {
                 self.used[id] = true;
                 self.ports[id].write(Port::new(id, owner_pid));
@@ -294,15 +305,22 @@ static IPC_READY: AtomicBool = AtomicBool::new(false);
 // IPC_MANAGER is protected by SpinLock, so access is race-free even with IRQs enabled.
 static IPC_MANAGER_LOCK: SpinLock<MaybeUninit<IpcManager>> = SpinLock::new(MaybeUninit::uninit());
 
-/// Idempotent initialization.
+/// Idempotent initialization (race-safe).
 pub fn init_ipc() {
     if IPC_READY.load(Ordering::Acquire) {
         return;
     }
-    {
-        let mut guard = IPC_MANAGER_LOCK.lock();
-        guard.write(IpcManager::new());
+
+    let mut guard = IPC_MANAGER_LOCK.lock();
+
+    // Second check under lock: prevents double-init under concurrency.
+    if IPC_READY.load(Ordering::Relaxed) {
+        return;
     }
+
+    guard.write(IpcManager::new());
+
+    // Publish after the manager is written.
     IPC_READY.store(true, Ordering::Release);
 }
 
@@ -363,6 +381,9 @@ pub fn ipc_send(
         data,
     };
 
+    // TODO: refine error codes:
+    // - if port closed => EPIPE
+    // - if queue full  => EAGAIN
     match with_ipc_manager_mut(|mgr| mgr.send_message(port_id, msg)) {
         Some(true) => 0,
         Some(false) => EPIPE,
@@ -511,6 +532,9 @@ impl ServerChannels {
     }
 
     pub fn send_to_init(&mut self, mut msg: Message) -> bool {
+        // Lock ordering recommendation:
+        // - If you ever need both locks, keep order: SERVICE_REGISTRY_LOCK -> IPC_MANAGER_LOCK.
+        // This function follows that order (registry lookup first, IPC send second).
         if let Some((_, pid)) = lookup_service("init") {
             msg.receiver_pid = pid;
         } else {

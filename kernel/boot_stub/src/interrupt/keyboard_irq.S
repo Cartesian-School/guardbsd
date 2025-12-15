@@ -1,37 +1,28 @@
 /* kernel/boot_stub/src/interrupt/keyboard_irq.S
  *
- * x86_64 IRQ1 keyboard interrupt handler stub for boot_stub.
- *
- * Responsibilities:
- * - Save all GPRs (safe for Rust call)
- * - Call Rust handler: keyboard_interrupt_handler()
- * - Send EOI to 8259 PIC (master)
- * - Restore registers and return with IRETQ
- *
- * Notes:
- * - We assume legacy PIC is remapped to 0x20..0x2F and IRQ1 is vector 0x21.
- * - This handler is installed in IDT as an interrupt gate (IF cleared on entry).
+ * IRQ1 keyboard stub for x86_64 boot_stub.
+ * Calls Rust: keyboard_interrupt_handler()
+ * Sends PIC EOI and returns with iretq.
  */
 
 .code64
 .section .text
 .align 16
 
-/* PIC I/O ports */
-.equ PIC1_CMD, 0x20
-.equ PIC_EOI,  0x20
-
 .global keyboard_irq_handler
 .type keyboard_irq_handler, @function
+
+.extern keyboard_interrupt_handler
+
 keyboard_irq_handler:
     cld
 
-    /* Save all GPRs (15 pushes => keeps stack alignment suitable for SysV calls). */
+    /* Save all GP regs (we may interrupt kernel code) */
     pushq %rax
+    pushq %rbp
     pushq %rbx
     pushq %rcx
     pushq %rdx
-    pushq %rbp
     pushq %rsi
     pushq %rdi
     pushq %r8
@@ -43,14 +34,23 @@ keyboard_irq_handler:
     pushq %r14
     pushq %r15
 
-    /* Call Rust-level handler (no args). */
+    /* Keep saved stack pointer in a callee-saved register across the call */
+    movq %rsp, %r15
+
+    /* Align stack for System V ABI call */
+    andq $-16, %rsp
+
     call keyboard_interrupt_handler
 
-    /* Send End-Of-Interrupt to master PIC (IRQ1 is on PIC1). */
-    movb $PIC_EOI, %al
-    outb %al, $PIC1_CMD
+    /* Restore original stack */
+    movq %r15, %rsp
 
-    /* Restore registers. */
+    /* PIC EOI for IRQ1 (master PIC) */
+    movb $0x20, %al
+    movw $0x20, %dx
+    outb %al, %dx
+
+    /* Restore regs */
     popq %r15
     popq %r14
     popq %r13
@@ -61,10 +61,10 @@ keyboard_irq_handler:
     popq %r8
     popq %rdi
     popq %rsi
-    popq %rbp
     popq %rdx
     popq %rcx
     popq %rbx
+    popq %rbp
     popq %rax
 
     iretq
