@@ -1,3 +1,4 @@
+//! kernel/boot_stub/src/main.rs
 //! Project: GuardBSD Winter Saga version 1.0.0
 //! Package: boot_stub
 //! Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.

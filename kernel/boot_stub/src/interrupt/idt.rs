@@ -10,11 +10,13 @@
 //! - Install only: IRQ0 (timer), IRQ1 (keyboard), INT 0x80 (syscall gate).
 //!
 //! Optional debugging policy (feature = "idt_exceptions"):
-//! - Install exception vectors 0..31 using per-vector ASM stubs (exc_stub_0..exc_stub_31)
-//!   that jump to common_exception_handler. This avoids triple-fault and helps early debug.
+//! - Install exception vectors 0..31 using per-vector ASM stubs `exc_stub_N`
+//!   which push vector number and tail-jump into `common_exception_handler`.
 //!
 //! Notes:
-//! - IST is set to 0 for all entries because boot stub does not yet maintain IST stacks.
+//! - IST is set to 0 for all entries because boot stub does not yet maintain
+//!   dedicated interrupt stacks (IST1..IST7). Single-stack early boot is simpler
+//!   and deterministic.
 
 #![cfg(target_arch = "x86_64")]
 
@@ -73,7 +75,6 @@ extern "C" {
     fn timer_irq_handler();
     fn syscall_entry();
 
-    // --- REPLACED BLOCK AS REQUESTED ---
     #[cfg(feature = "idt_exceptions")]
     fn exc_stub_0();
     #[cfg(feature = "idt_exceptions")]
@@ -179,13 +180,8 @@ pub fn init_idt() {
             set_idt_entry(31, exc_stub_31 as usize as u64, KERNEL_CS, FLAG_INTGATE_DPL0);
         }
 
-        // IRQ0 (timer)
         set_idt_entry(IRQ0_VECTOR, timer_irq_handler as usize as u64, KERNEL_CS, FLAG_INTGATE_DPL0);
-
-        // IRQ1 (keyboard)
         set_idt_entry(IRQ1_VECTOR, keyboard_irq_handler as usize as u64, KERNEL_CS, FLAG_INTGATE_DPL0);
-
-        // INT 0x80 syscall gate (DPL=3)
         set_idt_entry(SYSCALL_VECTOR, syscall_entry as usize as u64, KERNEL_CS, FLAG_INTGATE_DPL3);
 
         let idtr = IdtPtr {
@@ -210,8 +206,7 @@ unsafe fn set_idt_entry(index: usize, handler: u64, selector: u16, flags: u8) {
     IDT[index] = IdtEntry {
         offset_low: (handler & 0xFFFF) as u16,
         selector,
-        // IST=0: boot stub does not use dedicated interrupt stacks yet.
-        ist: 0,
+        ist: 0, // IST=0: boot stub does not use dedicated interrupt stacks yet.
         flags,
         offset_mid: ((handler >> 16) & 0xFFFF) as u16,
         offset_high: ((handler >> 32) & 0xFFFF_FFFF) as u32,

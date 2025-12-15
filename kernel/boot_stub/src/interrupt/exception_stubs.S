@@ -3,11 +3,12 @@
  * Minimal x86_64 exception stubs for boot_stub IDT (vectors 0..31).
  *
  * Design:
- * - Each exc_stub_N pushes vector number and jumps to common_exception_handler.
+ * - Each exc_stub_N pushes the vector number and jumps to common_exception_handler.
  * - common_exception_handler prints diagnostics to COM1 and halts forever.
  *
- * Calling convention for helpers:
- * - write_char_bl: character MUST be in BL.
+ * Supports:
+ * - Exceptions with or without error code (auto-detected by CS position).
+ * - Optional CPL change stack extension (old RSP/SS) if CS == 0x1B.
  */
 
 .code64
@@ -18,6 +19,7 @@
 
 /* ------------------------------------------------------------
  * Serial helpers (COM1)
+ * Contract: character is passed in BL.
  * ---------------------------------------------------------- */
 
 write_char_bl:
@@ -62,12 +64,12 @@ write_hex64:
     push %rsi
 
     lea hex_digits(%rip), %rsi
-    mov $60, %ecx
+    mov $60, %ecx                   /* shift count */
 1:
     mov %rdi, %rax
     shr %cl, %rax
     and $0xF, %rax
-    movzbq (%rsi,%rax,1), %rbx
+    movzbq (%rsi,%rax,1), %rbx      /* BL = digit */
     call write_char_bl
     sub $4, %ecx
     jns 1b
@@ -91,7 +93,7 @@ write_hex16:
     push %rdx
     push %rsi
     lea hex_digits(%rip), %rsi
-    mov $12, %ecx
+    mov $12, %ecx                   /* shifts 12,8,4,0 */
 1:
     mov %rdi, %rax
     shr %cl, %rax
@@ -100,7 +102,6 @@ write_hex16:
     call write_char_bl
     sub $4, %ecx
     jns 1b
-
     pop %rsi
     pop %rdx
     pop %rcx
@@ -126,10 +127,10 @@ common_exception_handler:
     cli
     cld
 
-    /* r12 = original frame pointer (points to VEC) */
+    /* Save original stack pointer (points to VEC) */
     mov %rsp, %r12
 
-    /* Save some regs for stable printing (we never return) */
+    /* Save some regs for stable output (we never return) */
     push %rax
     push %rbx
     push %rcx
@@ -145,16 +146,29 @@ common_exception_handler:
     push %r14
     push %r15
 
-    /* vec in r13 */
-    movq 0(%r12), %r13
+    /* Read vector */
+    movq 0(%r12), %r13              /* r13 = vec */
 
-    /* Determine layout (error-code vs no-error) by checking likely CS location */
-    movq 16(%r12), %rax
-    movq 24(%r12), %rbx
+    /* Determine layout by inspecting CS positions.
+     * No-error layout after vec:
+     *   +8  RIP
+     *   +16 CS
+     *   +24 RFLAGS
+     *   [+32 old RSP, +40 old SS if CPL change]
+     *
+     * Error-code layout after vec:
+     *   +8  ERROR
+     *   +16 RIP
+     *   +24 CS
+     *   +32 RFLAGS
+     *   [+40 old RSP, +48 old SS if CPL change]
+     */
+    movq 16(%r12), %rax             /* maybe CS (noerr) */
+    movq 24(%r12), %rbx             /* maybe CS (err) */
     movw %ax, %ax
     movw %bx, %bx
 
-    mov $0, %r14d      /* has_err = 0 */
+    mov $0, %r14d                   /* r14d = has_err? 0/1 */
     cmpw $0x08, %ax
     je  .Lnoerr
     cmpw $0x1B, %ax
@@ -168,17 +182,22 @@ common_exception_handler:
 .Lerr:
     mov $1, %r14d
     jmp .Llayout_done
-
 .Lnoerr:
     mov $0, %r14d
-
 .Llayout_done:
-    /* Extract: r15=err, r11=rip, r10=cs, r9=rflags, r8=cr2 */
+
+    /* Extract:
+     *   r15 = err (or 0)
+     *   r11 = rip
+     *   r10 = cs
+     *   r9  = rflags
+     *   r8  = cr2
+     */
     cmp $0, %r14d
     je  .Lextract_noerr
 
 .Lextract_err:
-    movq 8(%r12),  %r15             /* error */
+    movq 8(%r12),  %r15             /* error code */
     movq 16(%r12), %r11             /* RIP */
     movq 24(%r12), %r10             /* CS */
     movq 32(%r12), %r9              /* RFLAGS */
@@ -197,69 +216,80 @@ common_exception_handler:
     lea msg_exc(%rip), %rsi
     call write_str
 
+    /* vec */
     lea msg_vec(%rip), %rsi
     call write_str
     mov %r13, %rdi
     call write_hex64
 
+    /* err */
     lea msg_err(%rip), %rsi
     call write_str
     mov %r15, %rdi
     call write_hex64
 
+    /* rip */
     lea msg_rip(%rip), %rsi
     call write_str
     mov %r11, %rdi
     call write_hex64
 
+    /* cs */
     lea msg_cs(%rip), %rsi
     call write_str
     mov %r10, %rdi
     call write_hex16
 
+    /* rflags */
     lea msg_rflags(%rip), %rsi
     call write_str
     mov %r9, %rdi
     call write_hex64
 
+    /* rsp(frame) */
     lea msg_rsp(%rip), %rsi
     call write_str
     mov %r12, %rdi
     call write_hex64
 
+    /* cr2 */
     lea msg_cr2(%rip), %rsi
     call write_str
     mov %r8, %rdi
     call write_hex64
 
-    /* If exception came from user mode (CS=0x1B), also print old RSP/SS */
+    /* If exception came from user mode (CS=0x1B), print old RSP/SS too. */
     movw %r10w, %ax
     cmpw $0x1B, %ax
-    jne .Ldone_user
-
-    lea msg_oldrsp(%rip), %rsi
-    call write_str
+    jne .Ldone_user_extra
 
     cmp $0, %r14d
     je  .Luser_noerr
+
 .Luser_err:
-    movq 40(%r12), %rdi             /* old RSP */
+    lea msg_oldrsp(%rip), %rsi
+    call write_str
+    movq 40(%r12), %rdi
     call write_hex64
+
     lea msg_oldss(%rip), %rsi
     call write_str
-    movq 48(%r12), %rdi             /* old SS */
+    movq 48(%r12), %rdi
     call write_hex16
-    jmp .Ldone_user
+    jmp .Ldone_user_extra
 
 .Luser_noerr:
-    movq 32(%r12), %rdi             /* old RSP */
+    lea msg_oldrsp(%rip), %rsi
+    call write_str
+    movq 32(%r12), %rdi
     call write_hex64
+
     lea msg_oldss(%rip), %rsi
     call write_str
-    movq 40(%r12), %rdi             /* old SS */
+    movq 40(%r12), %rdi
     call write_hex16
 
-.Ldone_user:
+.Ldone_user_extra:
     call write_nl
 
 .Lhalt:
@@ -270,6 +300,7 @@ common_exception_handler:
 
 /* ------------------------------------------------------------
  * Per-vector stubs: exc_stub_0 .. exc_stub_31
+ * Each pushes vector number and jumps to common handler.
  * ---------------------------------------------------------- */
 
 .macro EXC_STUB vec

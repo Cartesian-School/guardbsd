@@ -1,8 +1,10 @@
 /* kernel/boot_stub/src/interrupt/keyboard_irq.S
  *
- * IRQ1 keyboard stub for x86_64 boot_stub.
- * Calls Rust: keyboard_interrupt_handler()
- * Sends PIC EOI and returns with iretq.
+ * Minimal x86_64 IRQ1 handler for boot_stub.
+ * - Saves GPRs
+ * - Calls Rust: keyboard_interrupt_handler()
+ * - Sends EOI to PIC master
+ * - Returns with iretq
  */
 
 .code64
@@ -11,20 +13,20 @@
 
 .global keyboard_irq_handler
 .type keyboard_irq_handler, @function
-
-.extern keyboard_interrupt_handler
-
 keyboard_irq_handler:
     cld
 
-    /* Save all GP regs (we may interrupt kernel code) */
+    /* Save GPRs (15 pushes).
+     * NOTE: With typical 16-byte aligned kernel stack, the CPU interrupt frame
+     * makes RSP misaligned by 8, and 15 pushes realign it for a SysV call.
+     */
     pushq %rax
-    pushq %rbp
     pushq %rbx
     pushq %rcx
     pushq %rdx
     pushq %rsi
     pushq %rdi
+    pushq %rbp
     pushq %r8
     pushq %r9
     pushq %r10
@@ -34,23 +36,15 @@ keyboard_irq_handler:
     pushq %r14
     pushq %r15
 
-    /* Keep saved stack pointer in a callee-saved register across the call */
-    movq %rsp, %r15
-
-    /* Align stack for System V ABI call */
-    andq $-16, %rsp
-
+    /* Call Rust IRQ handler */
     call keyboard_interrupt_handler
 
-    /* Restore original stack */
-    movq %r15, %rsp
-
-    /* PIC EOI for IRQ1 (master PIC) */
+    /* PIC EOI (master) */
     movb $0x20, %al
     movw $0x20, %dx
     outb %al, %dx
 
-    /* Restore regs */
+    /* Restore GPRs */
     popq %r15
     popq %r14
     popq %r13
@@ -59,14 +53,13 @@ keyboard_irq_handler:
     popq %r10
     popq %r9
     popq %r8
+    popq %rbp
     popq %rdi
     popq %rsi
     popq %rdx
     popq %rcx
     popq %rbx
-    popq %rbp
     popq %rax
 
     iretq
-
 .size keyboard_irq_handler, . - keyboard_irq_handler
