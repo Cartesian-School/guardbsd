@@ -1,7 +1,12 @@
+# kernel/boot_stub/Cargo.toml
 [package]
 name = "boot_stub"
 version = "1.0.0"
 edition = "2021"
+
+[features]
+# Enables exception vectors 0..31 in IDT and links ASM exception stubs
+idt_exceptions = []
 
 [dependencies]
 shared = { path = "../../shared" }
@@ -16,3 +21,8 @@ panic = "abort"
 opt-level = 2
 lto = true
 codegen-units = 1
+
+# Optional, helpful during bring-up:
+[profile.dev]
+panic = "abort"
+opt-level = 0
