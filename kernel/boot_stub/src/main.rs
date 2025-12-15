@@ -39,13 +39,23 @@ const ERANGE: isize = -34;
 // ============================================================================
 #[inline(always)]
 pub unsafe fn outb(port: u16, val: u8) {
-    core::arch::asm!("out dx, al", in("dx") port, in("al") val, options(nomem, nostack, preserves_flags));
+    core::arch::asm!(
+        "out dx, al",
+        in("dx") port,
+        in("al") val,
+        options(nomem, nostack, preserves_flags)
+    );
 }
 
 #[inline(always)]
 pub unsafe fn inb(port: u16) -> u8 {
     let ret: u8;
-    core::arch::asm!("in al, dx", out("al") ret, in("dx") port, options(nomem, nostack, preserves_flags));
+    core::arch::asm!(
+        "in al, dx",
+        out("al") ret,
+        in("dx") port,
+        options(nomem, nostack, preserves_flags)
+    );
     ret
 }
 
@@ -59,33 +69,45 @@ mod syscall {
     //! If/when you add the real `shared` crate later, you can switch these constants
     //! back to canonical values.
 
-    use super::{EFAULT, EINVAL, EIO, ENOSYS, ERANGE};
+    use super::{c_void, EFAULT, EINVAL, EIO, ENOSYS, ERANGE};
 
     // ------------------------------------------------------------------------
     // Syscall numbers (local, boot_stub only)
     // ------------------------------------------------------------------------
-    // Keep the "classic" ones compatible with x86_64 Linux where reasonable,
-    // and assign your custom ones in a high range to avoid collisions.
-    pub(crate) const SYS_WRITE: usize = 1;
-    pub(crate) const SYS_READ: usize = 0;
-    pub(crate) const SYS_OPEN: usize = 2;   // boot_stub local (not Linux)
-    pub(crate) const SYS_CLOSE: usize = 3;  // boot_stub local (not Linux)
+    //
+    // NOTE (GuardBSD docs alignment step 1):
+    // USERTEST must call SYS_WRITE=4 (not 11).
+    // We adjust only the basic I/O syscall numbers here so USERTEST hits the
+    // correct dispatch entry.
+    //
+    // The rest of the table (process/signals/jobctl/etc.) will be normalized
+    // when we finish the expected user-mode ABI mapping for init/gsh.
 
-    pub(crate) const SYS_EXIT: usize = 60;
-    pub(crate) const SYS_GETPID: usize = 39;
+    // NOTE:
+    // This project’s docs/API use i386-style “classic” numbers for core syscalls:
+    //   exit=1, read=3, write=4, open=5, close=6, getpid=7, ...
+    // Keep custom syscalls in a high range to avoid collisions.
+    pub(crate) const SYS_EXIT: usize = 1;
+    pub(crate) const SYS_READ: usize = 3;
+    pub(crate) const SYS_WRITE: usize = 4;
+    pub(crate) const SYS_OPEN: usize = 5;
+    pub(crate) const SYS_CLOSE: usize = 6;
+    pub(crate) const SYS_GETPID: usize = 7;
+
+    // Keep the rest as-is for now (until we unify the full ABI table for init/gsh).
     pub(crate) const SYS_FORK: usize = 57;
-    pub(crate) const SYS_EXEC: usize = 59;   // execve-like
-    pub(crate) const SYS_WAIT: usize = 61;   // wait4-like
+    pub(crate) const SYS_EXEC: usize = 59; // execve-like
+    pub(crate) const SYS_WAIT: usize = 61; // wait4-like
     pub(crate) const SYS_YIELD: usize = 24_000; // custom
 
-    pub(crate) const SYS_SIGNAL: usize = 24_010;         // custom
-    pub(crate) const SYS_SIGACTION: usize = 24_011;      // custom
+    pub(crate) const SYS_SIGNAL: usize = 24_010; // custom
+    pub(crate) const SYS_SIGACTION: usize = 24_011; // custom
     pub(crate) const SYS_SIGNAL_REGISTER: usize = 24_012; // custom
-    pub(crate) const SYS_SIGRETURN: usize = 24_013;      // custom
-    pub(crate) const SYS_WAITPID: usize = 24_014;        // custom
+    pub(crate) const SYS_SIGRETURN: usize = 24_013; // custom
+    pub(crate) const SYS_WAITPID: usize = 24_014; // custom
 
     // Job control / process groups
-    pub(crate) const SYS_KILL: usize = 62;   // kill-like
+    pub(crate) const SYS_KILL: usize = 62; // kill-like
     pub(crate) const SYS_SETPGID: usize = 24_020;
     pub(crate) const SYS_GETPGID: usize = 24_021;
 
@@ -821,7 +843,6 @@ fn validate_module_elf(name_ptr: *const u8, data: &[u8]) {
         panic_invalid_module(name_ptr, 0, 0, data, "Module ELF not x86_64 machine");
     }
 
-    // FIX: cast cannot be followed by a method call -> parentheses
     let ph_end = (ehdr.e_phoff as usize)
         .saturating_add((ehdr.e_phnum as usize) * (ehdr.e_phentsize as usize));
     if ph_end > data.len() {
@@ -916,11 +937,7 @@ unsafe fn spawn_module_from_blob(name_ptr: *const u8, start: u64, end: u64) -> u
         }
     }
 
-    let pid = crate::process::process::create_process(
-        loaded.entry,
-        MODULE_STACK_TOP as u64,
-        aspace.pml4_phys(),
-    );
+    let pid = crate::process::process::create_process(loaded.entry, MODULE_STACK_TOP as u64, aspace.pml4_phys());
     if pid == 0 {
         panic_and_halt("Failed to allocate PID for module");
     }
@@ -952,16 +969,30 @@ unsafe fn spawn_module_from_blob(name_ptr: *const u8, start: u64, end: u64) -> u
     pid as usize
 }
 
+// ============================================================================
+// USERTEST (user-mode syscall smoke test)
+// ============================================================================
+//
+// FIX REQUIRED BY YOU:
+// - USERTEST must call SYS_WRITE=4 (not 11).
+// - The previous bytes encoded `mov rax,11`, which did not match your syscall table.
+//
+// This code does:
+//   rax = 4   (SYS_WRITE)
+//   rdi = 1   (stdout)
+//   rsi = &"[USERTEST] hello\n"
+//   rdx = 17
+//   int 0x80
 const USERTEST_BASE: u64 = 0x0000_0070_0000;
 const USERTEST_STACK_TOP: u64 = 0x0000_0070_F000;
 const USERTEST_CODE: [u8; 57] = [
-    0x48, 0xB8, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax,11
-    0x48, 0xBF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rdi,1
-    0x48, 0x8D, 0x35, 0x0D, 0x00, 0x00, 0x00, // lea rsi,[rip+0xd]
-    0x48, 0xC7, 0xC2, 0x11, 0x00, 0x00, 0x00, // mov rdx,0x11
-    0xCD, 0x80, // int 0x80
-    0xF3, 0x90,             // pause
-    0xEB, 0xFC,             // jmp back to pause
+    0x48, 0xB8, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax,4   (SYS_WRITE)
+    0x48, 0xBF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rdi,1   (fd=stdout)
+    0x48, 0x8D, 0x35, 0x0D, 0x00, 0x00, 0x00,                   // lea rsi,[rip+0xd] (msg)
+    0x48, 0xC7, 0xC2, 0x11, 0x00, 0x00, 0x00,                   // mov rdx,0x11 (len=17)
+    0xCD, 0x80,                                                 // int 0x80
+    0xF3, 0x90,                                                 // pause
+    0xEB, 0xFC,                                                 // jmp back to pause
     b'[', b'U', b'S', b'E', b'R', b'T', b'E', b'S', b'T', b']', b' ', b'h', b'e', b'l', b'l', b'o', b'\n',
 ];
 
@@ -1538,58 +1569,9 @@ fn init_filesystem() {
     fs::iso9660::init(0);
 }
 
-fn print_hex32(n: u32) {
-    unsafe {
-        let hex = b"0123456789abcdef";
-        for i in (0..8).rev() {
-            let nibble = ((n >> (i * 4)) & 0xF) as usize;
-            let ch = hex[nibble];
-            while (inb(COM1 + 5) & 0x20) == 0 {}
-            outb(COM1, ch);
-        }
-    }
-}
-
-fn print_hex64(n: u64) {
-    unsafe {
-        let hex = b"0123456789abcdef";
-        for i in (0..16).rev() {
-            let nibble = ((n >> (i * 4)) & 0xF) as usize;
-            let ch = hex[nibble];
-            while (inb(COM1 + 5) & 0x20) == 0 {}
-            outb(COM1, ch);
-        }
-    }
-}
-
 fn load_shell() {
     // Filesystem loading will be implemented when ISO is properly mapped
     // For now, use built-in shell
-}
-
-fn print_num(n: usize) {
-    unsafe {
-        let mut buf = [0u8; 20];
-        let mut i = 0;
-        let mut num = n;
-
-        if num == 0 {
-            print("0");
-            return;
-        }
-
-        while num > 0 {
-            buf[i] = (num % 10) as u8 + b'0';
-            num /= 10;
-            i += 1;
-        }
-
-        while i > 0 {
-            i -= 1;
-            while (inb(COM1 + 5) & 0x20) == 0 {}
-            outb(COM1, buf[i]);
-        }
-    }
 }
 
 unsafe fn create_init_process() -> InitBootstrapInfo {
@@ -1629,11 +1611,7 @@ unsafe fn create_init_process() -> InitBootstrapInfo {
     print("\n");
 
     // Create process table entry (PID 1 expected)
-    let pid = crate::process::process::create_process(
-        loaded.entry,
-        INIT_STACK_TOP as u64,
-        aspace.pml4_phys(),
-    );
+    let pid = crate::process::process::create_process(loaded.entry, INIT_STACK_TOP as u64, aspace.pml4_phys());
     if pid != 1 {
         panic_and_halt("PID allocator did not return PID 1");
     }

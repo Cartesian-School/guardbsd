@@ -1,0 +1,18 @@
+[package]
+name = "boot_stub_riscv64"
+version = "0.1.0"
+edition = "2024"
+
+# No dependencies: pure no_std bring-up.
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+
+[[bin]]
+name = "guardbsd-riscv64"
+path = "src/main.rs"
