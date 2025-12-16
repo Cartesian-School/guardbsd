@@ -119,3 +119,16 @@ pub fn read_time() -> u64 {
     }
     v
 }
+
+#[inline(always)]
+pub fn enable_sext_interrupt() {
+    // sie.SEIE = bit 9 => must use register form
+    let mask: usize = 1 << 9;
+    unsafe {
+        core::arch::asm!(
+            "csrrs x0, sie, {0}",
+            in(reg) mask,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+}

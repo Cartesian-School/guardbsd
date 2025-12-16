@@ -23,20 +23,32 @@ mod timer;
 #[path = "../../arch/riscv64/trap.rs"]
 mod trap;
 
-// Boot entry (_start) from your existing boot.S
+#[path = "../../arch/riscv64/plic.rs"]
+mod plic;
+
+#[path = "../../arch/riscv64/uart_irq.rs"]
+mod uart_irq;
+
+// Boot entry (_start) from boot.S
 core::arch::global_asm!(include_str!("../../arch/riscv64/boot.S"));
 
-// Trap vector assembly
+// Trap vector assembly (trap_vector symbol lives here)
 core::arch::global_asm!(include_str!("../../arch/riscv64/trap.S"));
 
 use core::panic::PanicInfo;
+
+// Pull in the Console trait so we can use put_hex_u64 / put_dec_usize from dtb.rs
 use crate::dtb::Console;
 
 struct UartConsole(uart16550::Uart16550);
 
 impl dtb::Console for UartConsole {
-    fn putc(&self, ch: u8) { self.0.putc(ch); }
-    fn puts(&self, s: &str) { self.0.puts(s); }
+    fn putc(&self, ch: u8) {
+        self.0.putc(ch);
+    }
+    fn puts(&self, s: &str) {
+        self.0.puts(s);
+    }
 }
 
 #[panic_handler]
@@ -51,6 +63,7 @@ pub extern "C" fn rust_main(hart_id: usize, dtb_ptr: usize) -> ! {
     let con = UartConsole(uart16550::uart0());
 
     con.puts("GuardBSD (RISC-V RV64) bring-up\r\n");
+
     con.puts("hart_id = ");
     con.put_dec_usize(hart_id);
     con.puts("\r\n");
@@ -59,13 +72,19 @@ pub extern "C" fn rust_main(hart_id: usize, dtb_ptr: usize) -> ! {
     con.put_hex_u64(dtb_ptr as u64);
     con.puts("\r\n");
 
+    // DTB walk is useful to confirm addresses (PLIC/CLINT/VirtIO/MMIO etc.)
     dtb::parse_and_print(dtb_ptr, &con);
 
-    // Init traps + timer (CLINT mtime as source, stimecmp as compare)
+    // IMPORTANT:
+    // - This sets stvec, enables STI/SEI + global SIE,
+    // - arms stimecmp tick,
+    // - initializes PLIC for UART IRQ=10,
+    // - enables UART RX IRQ.
+    //
+    // Do NOT print "[TIMER] enabled..." here to avoid double logs.
     trap::init_traps_and_timer();
-    con.puts("[TIMER] enabled (10Hz default)\r\n");
 
-    // Main idle loop: wait for interrupts
+    // Idle loop: sleep until next interrupt (timer / UART / etc.)
     loop {
         unsafe { core::arch::asm!("wfi", options(nomem, nostack, preserves_flags)) }
     }
