@@ -30,7 +30,9 @@ License: BSD-3-Clause
 
 ---
 
-### **Proprietary Closed-Source Operating System**
+# GuardBSD®
+
+**Proprietary Closed-Source Operating System**
 
 **Legal and Ownership Notice**
 
@@ -50,5 +52,5 @@ Official website: https://guardbsd.org
 
 ---
 
-© 2025–2026 Siergej Sobolewski / Cartesian School. All Rights Reserved.  
+© 2025–2026 Siergej Sobolewski / Cartesian School. All Rights Reserved.
 GuardBSD® is a registered trademark of Cartesian School.
