@@ -52,7 +52,7 @@ We follow responsible disclosure practices:
 
 ## Legal Note
 
-GuardBSD® is proprietary software. Unauthorized access, reverse engineering, or exploitation attempts are strictly prohibited and may result in legal action.
+GuardBSD is proprietary software. Unauthorized access, reverse engineering, or exploitation attempts are strictly prohibited and may result in legal action.
 
 ---
 
