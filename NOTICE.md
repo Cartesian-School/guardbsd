@@ -2,7 +2,7 @@
 
 **Proprietary Software – All Rights Reserved**
 
-GuardBSD® is proprietary and closed-source software.
+GuardBSD is proprietary and closed-source software.
 
 The entire source code of the current version of GuardBSD, including the three microkernels (µK-Space, µK-Time, µK-IPC) and all privileged and unprivileged components, is not released under any open-source license and remains the exclusive property of Cartesian School.
 
@@ -15,4 +15,4 @@ Historical code previously published in this repository has been removed and doe
 All rights reserved.
 
 © 2025–2026 Siergej Sobolewski / Cartesian School.
-GuardBSD® is a registered trademark of Cartesian School.
+
