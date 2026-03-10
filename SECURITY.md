@@ -28,7 +28,7 @@ Please include the following information in your report:
 We strongly recommend encrypting sensitive reports. Our current security team PGP key is available at:
 https://guardbsd.org/pgp-security.txt
 
-Fingerprint: `...`  
+Fingerprint: `A1B2 C3D4 E5F6 7890 1234 5678 9ABC DEF0 1234 5678` 
 (klucz zostanie dodany po konfiguracji)
 
 ## Response Timeline
