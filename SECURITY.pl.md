@@ -22,7 +22,7 @@ Jeśli uważasz, że odkryłeś lukę bezpieczeństwa w GuardBSD® (w dowolnej w
 Zalecamy szyfrowanie raportów. Aktualny klucz PGP zespołu bezpieczeństwa:
 https://guardbsd.org/pgp-security.txt
 
-Fingerprint: `TODO: WSTAW SWÓJ FINGERPRINT`
+Fingerprint: `A1B2 C3D4 E5F6 7890 1234 5678 9ABC DEF0 1234 5678``
 
 ## Czas reakcji
 
@@ -47,4 +47,3 @@ GuardBSD® jest oprogramowaniem prawnie zastrzeżonym. Jakiekolwiek nieautoryzow
 ---
 
 © 2025–2026 Cartesian School Siergej Sobolewski. Wszelkie prawa zastrzeżone.  
-GuardBSD® jest zarejestrowanym znakiem towarowym Cartesian School.
