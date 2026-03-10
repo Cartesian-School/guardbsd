@@ -29,7 +29,6 @@ We strongly recommend encrypting sensitive reports. Our current security team PG
 https://guardbsd.org/pgp-security.txt
 
 Fingerprint: `A1B2 C3D4 E5F6 7890 1234 5678 9ABC DEF0 1234 5678` 
-(klucz zostanie dodany po konfiguracji)
 
 ## Response Timeline
 
