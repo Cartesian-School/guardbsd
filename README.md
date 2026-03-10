@@ -2,7 +2,7 @@
 Project: GuardBSD Winter Saga version 1.0.0
 Package: README
 Copyright © 2025 Cartesian School. Developed by Siergej Sobolewski.
-License: BSD-3-Clause
+Proprietary Closed-Source Operating System*
 -->
 
 <p align="center">
@@ -36,7 +36,7 @@ License: BSD-3-Clause
 
 **Legal and Ownership Notice**
 
-GuardBSD® is a proprietary operating system developed and owned exclusively by Cartesian School (represented by Siergej Sobolewski).
+GuardBSD is a proprietary operating system developed and owned exclusively by Cartesian School (represented by Siergej Sobolewski).
 
 This GitHub repository is maintained solely for the purpose of protecting the project name, trademark and brand identity. It does not contain, and has never contained in its current state, any source code of the active version of GuardBSD.
 
