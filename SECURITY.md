@@ -1,6 +1,6 @@
 # Security Policy
 
-**GuardBSD® – Proprietary Closed-Source Software**
+**GuardBSD – Proprietary Closed-Source Software**
 
 Cartesian School (represented by Siergej Sobolewski) takes the security of GuardBSD® and our customers extremely seriously.
 
@@ -57,4 +57,3 @@ GuardBSD® is proprietary software. Unauthorized access, reverse engineering, or
 ---
 
 © 2025–2026 Cartesian School Siergej Sobolewski. All Rights Reserved.  
-GuardBSD® is a registered trademark of Cartesian School.
