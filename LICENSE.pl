@@ -12,4 +12,3 @@ OPROGRAMOWANIE JEST UDOSTĘPNIANE „TAK JAK JEST”, BEZ JAKIEJKOLWIEK GWARANCJ
 
 Wszelkie prawa zastrzeżone.
 
-GuardBSD® jest zarejestrowanym znakiem towarowym Cartesian School.
