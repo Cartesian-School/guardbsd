@@ -6,7 +6,7 @@
 
 **Oświadczenie prawne i własnościowe**
 
-GuardBSD® jest prawnie zastrzeżonym systemem operacyjnym opracowanym i będącym wyłączną własnością Cartesian School (reprezentowanym przez Siergieja Sobolewskiego).
+GuardBSD jest prawnie zastrzeżonym systemem operacyjnym opracowanym i będącym wyłączną własnością Cartesian School (reprezentowanym przez Siergieja Sobolewskiego).
 
 Niniejsze repozytorium na GitHubie jest utrzymywane wyłącznie w celu ochrony nazwy projektu, znaku towarowego oraz tożsamości marki. Nie zawiera i nigdy nie zawierało w swojej aktualnej formie żadnego kodu źródłowego aktywnej wersji GuardBSD.
 
@@ -23,4 +23,3 @@ Oficjalna strona: https://guardbsd.org
 ---
 
 © 2025–2026 Siergej Sobolewski / Cartesian School. Wszelkie prawa zastrzeżone.  
-GuardBSD® jest zarejestrowanym znakiem towarowym Cartesian School.
