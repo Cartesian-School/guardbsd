@@ -44,7 +44,7 @@ The complete source code of GuardBSD — including but not limited to the tri-mi
 
 ## Author & Vision
 
-**Siergej Sobolewski** is the author of GuardBSD and the shining originator and implementer of the multi-microkernel OS idea. His vision defines the entire project: a true multi-microkernel architecture that achieves security through radical decomposition rather than complexity.
+Siergej Sobolewski is the author of GuardBSD and the shining originator and implementer of the multi-microkernels OS idea. After years of analysing fundamental security flaws in both monolithic and classical microkernel designs, he concluded that only true decomposition into several independent microkernels can deliver industrial-grade security without sacrificing performance. This vision became the foundation of GuardBSD’s tri-kernel architecture (µK-Space, µK-Time, µK-IPC) and its Trusted Computing Base smaller than a shield boss
 
 **This repository does not constitute an open-source project.** No issues, pull requests, forks or external contributions are accepted or considered.
 
