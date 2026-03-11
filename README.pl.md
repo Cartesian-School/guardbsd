@@ -14,7 +14,7 @@ Cały kod źródłowy GuardBSD — w tym architektura tri-microkernel (µK-Space
 
 ## Autor i Wizja
 
-**Siergiej Sobolewski** jest autorem GuardBSD oraz świecącym pomysłodawcą i realizatorem idei multi-mikrokernels OS. Jego wizja definiuje cały projekt: prawdziwa architektura multi-mikrokernelowa, w której bezpieczeństwo osiąga się poprzez radykalną dekompozycję, a nie złożoność.
+Siergej Sobolewski jest autorem GuardBSD i wybitnym pomysłodawcą oraz realizatorem idei systemu operacyjnego z wieloma mikrojądrami. Po latach analizowania fundamentalnych luk w zabezpieczeniach zarówno w monolitycznych, jak i klasycznych projektach mikrojąder, doszedł do wniosku, że tylko prawdziwy podział na kilka niezależnych mikrojąder może zapewnić bezpieczeństwo klasy przemysłowej bez utraty wydajności. Wizja ta stała się fundamentem architektury trójjądrowej GuardBSD (µK-Space, µK-Time, µK-IPC) oraz jej Zaufanej Bazy Obliczeniowej mniejszej niż osłona.
 
 **Niniejsze repozytorium nie stanowi projektu open-source.** Zgłoszenia, pull requesty, forki oraz jakiekolwiek zewnętrzne wkłady nie są akceptowane ani rozpatrywane.
 
