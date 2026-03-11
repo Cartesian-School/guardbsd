@@ -12,6 +12,10 @@ Niniejsze repozytorium na GitHubie jest utrzymywane wyłącznie w celu ochrony n
 
 Cały kod źródłowy GuardBSD — w tym architektura tri-microkernel (µK-Space, µK-Time, µK-IPC), wszystkie komponenty uprzywilejowane, systemy plików (GuardFS, GuardZFS), bootloader (GuaBoot), sterowniki urządzeń oraz powiązana własność intelektualna — jest ściśle zamknięty i znajduje się wyłącznie w prywatnych repozytoriach.
 
+## Autor i Wizja
+
+**Siergiej Sobolewski** jest autorem GuardBSD oraz świecącym pomysłodawcą i realizatorem idei multi-mikrokernels OS. Jego wizja definiuje cały projekt: prawdziwa architektura multi-mikrokernelowa, w której bezpieczeństwo osiąga się poprzez radykalną dekompozycję, a nie złożoność.
+
 **Niniejsze repozytorium nie stanowi projektu open-source.** Zgłoszenia, pull requesty, forki oraz jakiekolwiek zewnętrzne wkłady nie są akceptowane ani rozpatrywane.
 
 Wszystkie historyczne fragmenty kodu, które wcześniej mogły znajdować się w tym repozytorium, zostały usunięte i nie odpowiadają bieżącemu produktowi.
