@@ -4,7 +4,7 @@
 
 GuardBSD jest oprogramowaniem prawnie zastrzeżonym i zamkniętym (closed-source).
 
-Cały kod źródłowy aktualnej wersji GuardBSD, w tym trzy mikrokernele (µK-Space, µK-Time, µK-IPC) oraz wszystkie komponenty uprzywilejowane i nieuprzywilejowane, nie jest udostępniany na żadnej licencji otwartej i pozostaje wyłączną własnością Cartesian School.
+Cały kod źródłowy aktualnej wersji GuardBSD, w tym trzy mikrokernele (µK-Space, µK-Time, µK-IPC) oraz wszystkie komponenty uprzywilejowane i nieuprzywilejowane, nie jest udostępniany na żadnej licencji otwartej i pozostaje wyłączną własnością Cartesian School Siergej Sobolewski.
 
 Niniejsze repozytorium służy wyłącznie jako placeholder w celu ochrony nazwy i znaku towarowego. Nie udostępnia się w nim żadnego kodu źródłowego produktu.
 
